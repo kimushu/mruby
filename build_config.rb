@@ -68,6 +68,10 @@ MRuby::Build.new do |conf|
 end
 
 # Define cross build settings
+MRuby::CrossBuild.new('nios2') do |conf|
+  toolchain :nios2
+end
+
 # MRuby::CrossBuild.new('32bit') do |conf|
 #   toolchain :gcc
 #   
