@@ -68,8 +68,13 @@ MRuby::Build.new do |conf|
 end
 
 # Define cross build settings
-MRuby::CrossBuild.new('nios2') do |conf|
+MRuby::CrossBuild.new('rubic') do |conf|
   toolchain :nios2
+
+  conf.gem 'mrbgems/mruby-bin-mruby'
+
+  conf.cc.flags << "-DMACHINE_RUBIC"
+  # conf.cc.flags << "-DDISABLE_STDIO"
 end
 
 # MRuby::CrossBuild.new('32bit') do |conf|
