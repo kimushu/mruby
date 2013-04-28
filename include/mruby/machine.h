@@ -31,9 +31,11 @@ typedef struct mrb_machine {
   mrb_code (*mkarg_Ax) (int32_t);
   mrb_code (*mkarg_bc) (int, int);
 
+  int (*mkop_lit_int)(mrb_code *, int, mrb_int);
   int (*make_OP_CALL)(mrb_code* p);
 } mrb_machine;
 
 #define MAXLEN_OP_CALL  4
+#define MAXLEN_LIT 3
 
 #endif  /* !MRUBY_MACHINE_H */

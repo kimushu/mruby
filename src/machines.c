@@ -145,7 +145,18 @@ rite_mkarg_bc(int b, int c)
   return RITE_MKARG_bc(b,c);
 }
 
-static int rite_make_OP_CALL(mrb_code* p)
+static int
+rite_mkop_lit_int(mrb_code *p, int a, mrb_int i)
+{
+  if (i < RITE_MAXARG_sBx && i > -RITE_MAXARG_sBx) {
+    *p = rite_mkopcode(OP_LOADI) | rite_mkarg_A(a) | rite_mkarg_sBx(i);
+    return 1;
+  }
+  return 0;
+}
+
+static int
+rite_make_OP_CALL(mrb_code *p)
 {
   p[0] = rite_mkopcode(OP_CALL) | rite_mkarg_A(0);
   return 1;
@@ -178,11 +189,13 @@ static struct mrb_machine machine_rite =
   .mkarg_Ax   = rite_mkarg_Ax,
   .mkarg_bc   = rite_mkarg_bc,
 
+  .mkop_lit_int = rite_mkop_lit_int,
   .make_OP_CALL = rite_make_OP_CALL,
 };
 
-/*         (Rubic Nios VM)          */
-/* instructions: packed into Nios's */
+#ifdef MACHINE_RUBIC
+/*         (Rubic rubic VM)          */
+/* instructions: packed into rubic's */
 /*               custom instruction */
 /* -------------------------------  */
 /*     A:B:C:OP:uOP = 5: 5: 5: 7: 6 */
@@ -191,156 +204,178 @@ static struct mrb_machine machine_rite =
 /*   A:Bz:Cz:OP:uOP = 5: 8: 2: 7: 6 */
 /* -------------------------------  */
 /* jump instructions are consist of */
-/* custom instruction and Nios stan-*/
+/* custom instruction and rubic stan-*/
 /* dard instruction.                */
 
-#define NIOS_COMPILER_NAME      "RbcN"  /* Rubic Nios */
-#define NIOS_COMPILER_VERSION   "0000"
+#define RUBIC_COMPILER_NAME      "RbcN"  /* Rubic Nios2 */
+#define RUBIC_COMPILER_VERSION   "0000"
 
-#define NIOS_MAXARG_Bx    (0x3ff)
-#define NIOS_MAXARG_sBx   ((RITE_MAXARG_Bx+1)>>1)
-#define NIOS_CUSTOM_uOP   0x32    /* Nios custom instruction */
-#define NIOS_RETVAL_IDX   2       /* r2: return value */
-#define NIOS_WITH_RETVAL  ((mrb_code)(NIOS_RETVAL_IDX<<17)|(1<<14)) /* writerc=1 */
+#define RUBIC_MAXARG_Bx    (0x3ff)
+#define RUBIC_MAXARG_sBx   ((RITE_MAXARG_Bx+1)>>1)
+#define NIOS2_CUSTOM_uOP   0x32    /* rubic custom instruction */
+#define RUBIC_RETVAL_IDX   2       /* r2: return value */
+#define RUBIC_WITH_RETVAL  ((mrb_code)(RUBIC_RETVAL_IDX<<17)|(1<<14)) /* writerc=1 */
+#define NIOS2_READRA        (1<<16)
+#define NIOS2_READRB        (1<<15)
+#define NIOS2_WRITERC       (1<<14)
 
 static int
-nios_get_opcode(mrb_code i)
+rubic_get_opcode(mrb_code i)
 {
   return (i >> 6) & 0x7f;
 }
 
 static int
-nios_getarg_A(mrb_code i)
+rubic_getarg_A(mrb_code i)
 {
   return (i >> 27) & 0x1f;
 }
 
 static int
-nios_getarg_B(mrb_code i)
+rubic_getarg_B(mrb_code i)
 {
   return (i >> 22) & 0x1f;
 }
 
 static int
-nios_getarg_C(mrb_code i)
+rubic_getarg_C(mrb_code i)
 {
   return (i >> 17) & 0x1f;
 }
 
 static int
-nios_getarg_Bx(mrb_code i)
+rubic_getarg_Bx(mrb_code i)
 {
   return (i >> 17) & 0x3ff;
 }
 
 static int
-nios_getarg_sBx(mrb_code i)
+rubic_getarg_sBx(mrb_code i)
 {
-  return nios_getarg_Bx(i) - NIOS_MAXARG_sBx;
+  return rubic_getarg_Bx(i) - RUBIC_MAXARG_sBx;
 }
 
 static int32_t
-nios_getarg_Ax(mrb_code i)
+rubic_getarg_Ax(mrb_code i)
 {
   return (i >> 17) & 0x7fff;
 }
 
 static int
-nios_getarg_b(mrb_code i)
+rubic_getarg_b(mrb_code i)
 {
   return (i >> 19) & 0xff;
 }
 
 static int
-nios_getarg_c(mrb_code i)
+rubic_getarg_c(mrb_code i)
 {
   return (i >> 17) & 0x3;
 }
 
 static mrb_code
-nios_mkopcode(int op)
+rubic_mkopcode(int op)
 {
-  return ((op & 0x7f) << 6) | NIOS_CUSTOM_uOP;
+  return ((op & 0x7f) << 6) | NIOS2_CUSTOM_uOP;
 }
 
 static mrb_code
-nios_mkarg_A(int c)
+rubic_mkarg_A(int c)
 {
   return (mrb_code)(c & 0x1f) << 27;
 }
 
 static mrb_code
-nios_mkarg_B(int c)
+rubic_mkarg_B(int c)
 {
   return (mrb_code)(c & 0x1f) << 22;
 }
 
 static mrb_code
-nios_mkarg_C(int c)
+rubic_mkarg_C(int c)
 {
   return (mrb_code)(c & 0x1f) << 17;
 }
 
 static mrb_code
-nios_mkarg_Bx(int v)
+rubic_mkarg_Bx(int v)
 {
   return (mrb_code)(v & 0x3ff) << 17;
 }
 
 static mrb_code
-nios_mkarg_sBx(int v)
+rubic_mkarg_sBx(int v)
 {
-  return nios_mkarg_Bx(v + NIOS_MAXARG_sBx);
+  return rubic_mkarg_Bx(v + RUBIC_MAXARG_sBx);
 }
 
 static mrb_code
-nios_mkarg_Ax(int v)
+rubic_mkarg_Ax(int32_t v)
 {
   return (mrb_code)(v & 0x7fff) << 17;
 }
 
 static mrb_code
-nios_mkarg_bc(int b, int c)
+rubic_mkarg_bc(int b, int c)
 {
   return ((mrb_code)(b & 0xff) << 19) | ((mrb_code)(b & 0x3) << 17);
 }
 
-static int nios_make_OP_CALL(mrb_code* p)
+static int
+rubic_mkop_lit_int(mrb_code *p, int a, mrb_int i)
 {
-  p[0] = nios_mkopcode(OP_CALL) | NIOS_WITH_RETVAL;
-  p[1] = (NIOS_RETVAL_IDX << 27) | (0x0d << 11) | (0x3a); // jmp r*
+  int len = 0;
+  /* ori r2, r0, (i[14:0]<<1)|1 */
+  *p++ = (0 << 27) | (2 << 22) | ((((i & 0x7fff) << 1) + 1) << 6) | 0x14;
+  ++len;
+  if(i >= (1<<15) || i < -(1<<15)) {
+    /* orih r2, r2, i[30:15] */
+    *p++ = (2 << 27) | (2 << 22) | ((((i & 0x7fff8000) >> 14) + 1) << 6) | 0x34;
+    ++len;
+  }
+  *p++ = rubic_mkopcode(OP_REGMOVE) | rubic_mkarg_A(2) | NIOS2_READRA | rubic_mkarg_C(a);
+  return ++len;
+}
+
+static int
+rubic_make_OP_CALL(mrb_code* p)
+{
+  p[0] = rubic_mkopcode(OP_CALL) | RUBIC_WITH_RETVAL;
+  p[1] = (RUBIC_RETVAL_IDX << 27) | (0x0d << 11) | (0x3a); // jmp r*
   return 2;
 }
 
-static struct mrb_machine machine_nios =
+static struct mrb_machine machine_rubic =
 {
-  .compiler_name    = NIOS_COMPILER_NAME,
-  .compiler_version = NIOS_COMPILER_VERSION,
+  .compiler_name    = RUBIC_COMPILER_NAME,
+  .compiler_version = RUBIC_COMPILER_VERSION,
 
-  .maxarg_Bx  = NIOS_MAXARG_Bx,
-  .maxarg_sBx = NIOS_MAXARG_sBx,
+  .maxarg_Bx  = RUBIC_MAXARG_Bx,
+  .maxarg_sBx = RUBIC_MAXARG_sBx,
 
-  .get_opcode = nios_get_opcode,
-  .getarg_A   = nios_getarg_A,
-  .getarg_B   = nios_getarg_B,
-  .getarg_C   = nios_getarg_C,
-  .getarg_Bx  = nios_getarg_Bx,
-  .getarg_sBx = nios_getarg_sBx,
-  .getarg_Ax  = nios_getarg_Ax,
-  .getarg_b   = nios_getarg_b,
-  .getarg_c   = nios_getarg_c,
+  .get_opcode = rubic_get_opcode,
+  .getarg_A   = rubic_getarg_A,
+  .getarg_B   = rubic_getarg_B,
+  .getarg_C   = rubic_getarg_C,
+  .getarg_Bx  = rubic_getarg_Bx,
+  .getarg_sBx = rubic_getarg_sBx,
+  .getarg_Ax  = rubic_getarg_Ax,
+  .getarg_b   = rubic_getarg_b,
+  .getarg_c   = rubic_getarg_c,
 
-  .mkopcode   = nios_mkopcode,
-  .mkarg_A    = nios_mkarg_A,
-  .mkarg_B    = nios_mkarg_B,
-  .mkarg_C    = nios_mkarg_C,
-  .mkarg_Bx   = nios_mkarg_Bx,
-  .mkarg_sBx  = nios_mkarg_sBx,
-  .mkarg_Ax   = nios_mkarg_Ax,
-  .mkarg_bc   = nios_mkarg_bc,
+  .mkopcode   = rubic_mkopcode,
+  .mkarg_A    = rubic_mkarg_A,
+  .mkarg_B    = rubic_mkarg_B,
+  .mkarg_C    = rubic_mkarg_C,
+  .mkarg_Bx   = rubic_mkarg_Bx,
+  .mkarg_sBx  = rubic_mkarg_sBx,
+  .mkarg_Ax   = rubic_mkarg_Ax,
+  .mkarg_bc   = rubic_mkarg_bc,
 
-  .make_OP_CALL = nios_make_OP_CALL,
+  .mkop_lit_int = rubic_mkop_lit_int,
+  .make_OP_CALL = rubic_make_OP_CALL,
 };
+#endif
 
 int
 mrb_set_machine(mrb_state *mrb, const char *name)
@@ -348,10 +383,13 @@ mrb_set_machine(mrb_state *mrb, const char *name)
   if(strcmp(name, "rite") == 0) {
     mrb->machine = &machine_rite;
     return 0;
-  } else if(strcmp(name, "nios") == 0) {
-    mrb->machine = &machine_nios;
+  }
+#ifdef MACHINE_RUBIC
+  else if(strcmp(name, "rubic") == 0) {
+    mrb->machine = &machine_rubic;
     return 0;
   }
+#endif
 
   return -1;
 }
