@@ -6,6 +6,9 @@
 #define MRUBY_MACHINE_H
 
 typedef struct mrb_machine {
+  const char *compiler_name;
+  const char *compiler_version;
+
   int32_t maxarg_Bx;
   int32_t maxarg_sBx;
 

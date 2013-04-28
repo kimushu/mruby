@@ -399,8 +399,8 @@ write_rite_binary_header(mrb_state *mrb, size_t binary_size, uint8_t* bin)
 
   memcpy(header->binary_identify, RITE_BINARY_IDENFIFIER, sizeof(header->binary_identify));
   memcpy(header->binary_version, RITE_BINARY_FORMAT_VER, sizeof(header->binary_version));
-  memcpy(header->compiler_name, RITE_COMPILER_NAME, sizeof(header->compiler_name));
-  memcpy(header->compiler_version, RITE_COMPILER_VERSION, sizeof(header->compiler_version));
+  memcpy(header->compiler_name, mrb->machine->compiler_name, sizeof(header->compiler_name));
+  memcpy(header->compiler_version, mrb->machine->compiler_version, sizeof(header->compiler_version));
   uint32_to_bin(binary_size, header->binary_size);
   
   offset = (&(header->binary_crc[0]) - bin) + sizeof(uint16_t);
