@@ -9,6 +9,7 @@
 #define RITEBIN_EXT ".mrb"
 #define C_EXT       ".c"
 
+int  mrb_set_machine(mrb_state *, const char *);
 void mrb_show_version(mrb_state *);
 void mrb_show_copyright(mrb_state *);
 void parser_dump(mrb_state*, struct mrb_ast_node*, int);
@@ -35,6 +36,7 @@ usage(const char *name)
   "-v           print version number, then turn on verbose mode",
   "-g           produce debugging information",
   "-B<symbol>   binary <symbol> output in C language format",
+  "-m<machine>  set VM machine type (rite, nios)",
   "--verbose    run at verbose mode",
   "--version    print the version",
   "--copyright  print the copyright",
@@ -112,6 +114,12 @@ parse_args(mrb_state *mrb, int argc, char **argv, struct _args *args)
         break;
       case 'g':
         args->debug_info = 1;
+        break;
+      case 'm':
+        if(mrb_set_machine(mrb, (*argv) + 2) != 0) {
+          printf("%s: invalid VM type\n", (*argv) + 2);
+          exit(EXIT_FAILURE);
+        }
         break;
       case '-':
         if (strcmp((*argv) + 2, "version") == 0) {

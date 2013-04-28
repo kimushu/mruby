@@ -157,6 +157,8 @@ genop(codegen_scope *s, mrb_code i)
 static void
 genop_peep(codegen_scope *s, mrb_code i, int val)
 {
+  mrb_state *mrb = s->mrb;
+
   /* peephole optimization */
   if (s->lastlabel != s->pc && s->pc > 0) {
     mrb_code i0 = s->iseq[s->pc-1];
@@ -369,6 +371,7 @@ scope_error(codegen_scope *s)
 static inline void
 dispatch(codegen_scope *s, int pc)
 {
+  mrb_state *mrb = s->mrb;
   int diff = s->pc - pc;
   mrb_code i = s->iseq[pc];
   int c = GET_OPCODE(i);
@@ -393,6 +396,7 @@ dispatch(codegen_scope *s, int pc)
 static void
 dispatch_linked(codegen_scope *s, int pc)
 {
+  mrb_state *mrb = s->mrb;
   mrb_code i;
   int pos;
 
@@ -529,6 +533,7 @@ lv_idx(codegen_scope *s, mrb_sym id)
 static void
 for_body(codegen_scope *s, node *tree)
 {
+  mrb_state *mrb = s->mrb;
   codegen_scope *prev = s;
   int idx, base = s->idx;
   struct loopinfo *lp;
@@ -573,6 +578,7 @@ for_body(codegen_scope *s, node *tree)
 static int
 lambda_body(codegen_scope *s, node *tree, int blk)
 {
+  mrb_state *mrb = s->mrb;
   int idx, base = s->idx;
   mrb_code c;
 
@@ -663,6 +669,7 @@ lambda_body(codegen_scope *s, node *tree, int blk)
 static int
 scope_body(codegen_scope *s, node *tree)
 {
+  mrb_state *mrb = s->mrb;
   codegen_scope *scope = scope_new(s->mrb, s, tree->car);
   int idx = scope->idx;
 
@@ -713,6 +720,7 @@ attrsym(codegen_scope *s, mrb_sym a)
 static int
 gen_values(codegen_scope *s, node *t, int val)
 {
+  mrb_state *mrb = s->mrb;
   int n = 0;
 
   while (t) {
@@ -761,6 +769,7 @@ gen_values(codegen_scope *s, node *t, int val)
 static void
 gen_call(codegen_scope *s, node *tree, mrb_sym name, int sp, int val)
 {
+  mrb_state *mrb = s->mrb;
   mrb_sym sym = name ? name : sym(tree->cdr->car);
   int idx;
   int n = 0, noop = 0, sendv = 0, blk = 0;
@@ -845,6 +854,7 @@ gen_call(codegen_scope *s, node *tree, mrb_sym name, int sp, int val)
 static void
 gen_assignment(codegen_scope *s, node *node, int sp, int val)
 {
+  mrb_state *mrb = s->mrb;
   int idx;
   int type = (intptr_t)node->car;
 
@@ -919,6 +929,7 @@ gen_assignment(codegen_scope *s, node *node, int sp, int val)
 static void
 gen_vmassignment(codegen_scope *s, node *tree, int rhs, int val)
 {
+  mrb_state *mrb = s->mrb;
   int n = 0, post = 0;
   node *t, *p;
 
@@ -965,6 +976,7 @@ gen_vmassignment(codegen_scope *s, node *tree, int rhs, int val)
 static void
 gen_send_intern(codegen_scope *s)
 {
+  mrb_state *mrb = s->mrb;
   pop();
   genop(s, MKOP_ABC(OP_SEND, cursp(), new_msym(s, mrb_intern2(s->mrb, "intern", 6)), 0));
   push();
@@ -972,6 +984,7 @@ gen_send_intern(codegen_scope *s)
 static void
 gen_literal_array(codegen_scope *s, node *tree, int sym, int val)
 {
+  mrb_state *mrb = s->mrb;
   if (val) {
     int i = 0, j = 0;
 
@@ -1027,6 +1040,7 @@ gen_literal_array(codegen_scope *s, node *tree, int sym, int val)
 static void
 raise_error(codegen_scope *s, const char *msg)
 {
+  mrb_state *mrb = s->mrb;
   int idx = new_lit(s, mrb_str_new_cstr(s->mrb, msg));
 
   genop(s, MKOP_ABx(OP_ERR, 1, idx));
@@ -1103,6 +1117,7 @@ readint_mrb_int(codegen_scope *s, const char *p, int base, int neg, int *overflo
 static void
 codegen(codegen_scope *s, node *tree, int val)
 {
+  mrb_state *mrb = s->mrb;
   int nt;
 
   if (!tree) return;
@@ -2446,6 +2461,7 @@ loop_push(codegen_scope *s, enum looptype t)
 static void
 loop_break(codegen_scope *s, node *tree)
 {
+  mrb_state *mrb = s->mrb;
   if (!s->loop) {
     codegen(s, tree, NOVAL);
     raise_error(s, "unexpected break");
@@ -2488,6 +2504,7 @@ loop_break(codegen_scope *s, node *tree)
 static void
 loop_pop(codegen_scope *s, int val)
 {
+  mrb_state *mrb = s->mrb;
   if (val) {
     genop(s, MKOP_A(OP_LOADNIL, cursp()));
   }

@@ -9,9 +9,7 @@
 #include "mruby/proc.h"
 #include "opcode.h"
 
-static mrb_code call_iseq[] = {
-  MKOP_A(OP_CALL, 0),
-};
+static mrb_code call_iseq[MAXLEN_OP_CALL];
 
 struct RProc *
 mrb_proc_new(mrb_state *mrb, mrb_irep *irep)
@@ -191,7 +189,7 @@ mrb_init_proc(mrb_state *mrb)
   call_irep->flags = MRB_ISEQ_NO_FREE;
   call_irep->idx = -1;
   call_irep->iseq = call_iseq;
-  call_irep->ilen = 1;
+  call_irep->ilen = mrb->machine->make_OP_CALL(call_iseq);
 
   mrb->proc_class = mrb_define_class(mrb, "Proc", mrb->object_class);
   MRB_SET_INSTANCE_TT(mrb->proc_class, MRB_TT_PROC);

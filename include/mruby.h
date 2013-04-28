@@ -39,6 +39,8 @@ extern "C" {
 typedef uint32_t mrb_code;
 typedef uint32_t mrb_aspec;
 
+#include "mruby/machine.h"
+
 struct mrb_state;
 
 typedef void* (*mrb_allocf) (struct mrb_state *mrb, void*, size_t, void *ud);
@@ -138,6 +140,8 @@ typedef struct mrb_state {
 
   struct RClass *eException_class;
   struct RClass *eStandardError_class;
+
+  struct mrb_machine *machine;
 
   void *ud; /* auxiliary data */
 
