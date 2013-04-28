@@ -40,23 +40,107 @@
 #define RITE_MKARG_PACK(b,n1,c,n2) ((((b) & ((1<<n1)-1)) << (7+n2))|(((c) & ((1<<n2)-1)) << 7))
 #define RITE_MKARG_bc(b,c) RITE_MKARG_PACK(b,14,c,2)
 
-static int     rite_get_opcode(mrb_code i)  { return RITE_GET_OPCODE(i); }
-static int     rite_getarg_A  (mrb_code i)  { return RITE_GETARG_A(i); }
-static int     rite_getarg_B  (mrb_code i)  { return RITE_GETARG_B(i); }
-static int     rite_getarg_C  (mrb_code i)  { return RITE_GETARG_C(i); }
-static int     rite_getarg_Bx (mrb_code i)  { return RITE_GETARG_Bx(i); }
-static int     rite_getarg_sBx(mrb_code i)  { return RITE_GETARG_sBx(i); }
-static int32_t rite_getarg_Ax (mrb_code i)  { return RITE_GETARG_Ax(i); }
-static int     rite_getarg_b  (mrb_code i)  { return RITE_GETARG_b(i); }
-static int     rite_getarg_c  (mrb_code i)  { return RITE_GETARG_c(i); }
-static mrb_code rite_mkopcode (int op)      { return RITE_MKOPCODE(op); }
-static mrb_code rite_mkarg_A  (int c)       { return RITE_MKARG_A(c); }
-static mrb_code rite_mkarg_B  (int c)       { return RITE_MKARG_B(c); }
-static mrb_code rite_mkarg_C  (int c)       { return RITE_MKARG_C(c); }
-static mrb_code rite_mkarg_Bx (int v)       { return RITE_MKARG_Bx(v); }
-static mrb_code rite_mkarg_sBx(int v)       { return RITE_MKARG_sBx(v); }
-static mrb_code rite_mkarg_Ax (int32_t v)   { return RITE_MKARG_Ax(v); }
-static mrb_code rite_mkarg_bc (int b, int c){ return RITE_MKARG_bc(b,c); }
+static int
+rite_get_opcode(mrb_code i)
+{
+  return RITE_GET_OPCODE(i);
+}
+
+static int
+rite_getarg_A(mrb_code i)
+{
+  return RITE_GETARG_A(i);
+}
+
+static int
+rite_getarg_B(mrb_code i)
+{
+  return RITE_GETARG_B(i);
+}
+
+static int
+rite_getarg_C(mrb_code i)
+{
+  return RITE_GETARG_C(i);
+}
+
+static int
+rite_getarg_Bx(mrb_code i)
+{
+  return RITE_GETARG_Bx(i);
+}
+
+static int
+rite_getarg_sBx(mrb_code i)
+{
+  return RITE_GETARG_sBx(i);
+}
+
+static int32_t
+rite_getarg_Ax(mrb_code i)
+{
+  return RITE_GETARG_Ax(i);
+}
+
+static int
+rite_getarg_b(mrb_code i)
+{
+  return RITE_GETARG_b(i);
+}
+
+static int
+rite_getarg_c(mrb_code i)
+{
+  return RITE_GETARG_c(i);
+}
+
+static mrb_code
+rite_mkopcode(int op)
+{
+  return RITE_MKOPCODE(op);
+}
+
+static mrb_code
+rite_mkarg_A(int c)
+{
+  return RITE_MKARG_A(c);
+}
+
+static mrb_code
+rite_mkarg_B(int c)
+{
+  return RITE_MKARG_B(c);
+}
+
+static mrb_code
+rite_mkarg_C(int c)
+{
+  return RITE_MKARG_C(c);
+}
+
+static mrb_code
+rite_mkarg_Bx(int v)
+{
+  return RITE_MKARG_Bx(v);
+}
+
+static mrb_code
+rite_mkarg_sBx(int v)
+{
+  return RITE_MKARG_sBx(v);
+}
+
+static mrb_code
+rite_mkarg_Ax(int32_t v)
+{
+  return RITE_MKARG_Ax(v);
+}
+
+static mrb_code
+rite_mkarg_bc(int b, int c)
+{
+  return RITE_MKARG_bc(b,c);
+}
 
 static int rite_make_OP_CALL(mrb_code* p)
 {
