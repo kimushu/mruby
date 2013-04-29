@@ -2862,3 +2862,22 @@ mrb_generate_code(mrb_state *mrb, parser_state *p)
 
   return start;
 }
+
+int
+mrb_set_machine(mrb_state *mrb, const char *name)
+{
+  if(strcmp(name, "rite") == 0) {
+    extern struct mrb_machine machine_rite;
+    mrb->machine = &machine_rite;
+    return 0;
+  }
+#ifdef MACHINE_RUBIC
+  else if(strcmp(name, "rubic") == 0) {
+    extern struct mrb_machine machine_rubic;
+    mrb->machine = &machine_rubic;
+    return 0;
+  }
+#endif
+
+  return -1;
+}
