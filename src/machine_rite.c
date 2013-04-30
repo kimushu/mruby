@@ -1,5 +1,5 @@
 /*
-** machines.c - VM machines
+** machine_rite.c - RiteVM machine definition
 */
 
 #include "mruby.h"
@@ -15,381 +15,195 @@
 /*        Ax:OP =      25: 7        */
 /*   A:Bz:Cz:OP = 9:14: 2: 7        */
 
-#define RITE_COMPILER_NAME            "MATZ"
-#define RITE_COMPILER_VERSION         "0000"
+#define COMPILER_NAME            "MATZ"
+#define COMPILER_VERSION         "0000"
 
-#define RITE_MAXARG_Bx   (0xffff)
-#define RITE_MAXARG_sBx  (RITE_MAXARG_Bx>>1)    /* `sBx' is signed */
+#define MAXARG_Bx   (0xffff)
+#define MAXARG_sBx  (MAXARG_Bx>>1)    /* `sBx' is signed */
 
-#define RITE_GET_OPCODE(i) ((int)(((mrb_code)(i)) & 0x7f))
-#define RITE_GETARG_A(i)   ((int)((((mrb_code)(i)) >> 23) & 0x1ff))
-#define RITE_GETARG_B(i)   ((int)((((mrb_code)(i)) >> 14) & 0x1ff))
-#define RITE_GETARG_C(i)   ((int)((((mrb_code)(i)) >>  7) & 0x7f))
-#define RITE_GETARG_Bx(i)  ((int)((((mrb_code)(i)) >>  7) & 0xffff))
-#define RITE_GETARG_sBx(i) ((int)(RITE_GETARG_Bx(i)-RITE_MAXARG_sBx))
-#define RITE_GETARG_Ax(i)  ((int32_t)((((mrb_code)(i)) >>  7) & 0x1ffffff))
-#define RITE_GETARG_UNPACK_b(i,n1,n2) ((int)((((mrb_code)(i)) >> (7+(n2))) & (((1<<(n1))-1))))
-#define RITE_GETARG_UNPACK_c(i,n1,n2) ((int)((((mrb_code)(i)) >> 7) & (((1<<(n2))-1))))
-#define RITE_GETARG_b(i)   RITE_GETARG_UNPACK_b(i,14,2)
-#define RITE_GETARG_c(i)   RITE_GETARG_UNPACK_c(i,14,2)
+#define GET_OPCODE(i) ((int)(((mrb_code)(i)) & 0x7f))
+#define GETARG_A(i)   ((int)((((mrb_code)(i)) >> 23) & 0x1ff))
+#define GETARG_B(i)   ((int)((((mrb_code)(i)) >> 14) & 0x1ff))
+#define GETARG_C(i)   ((int)((((mrb_code)(i)) >>  7) & 0x7f))
+#define GETARG_Bx(i)  ((int)((((mrb_code)(i)) >>  7) & 0xffff))
+#define GETARG_sBx(i) ((int)(GETARG_Bx(i)-MAXARG_sBx))
+#define GETARG_Ax(i)  ((int32_t)((((mrb_code)(i)) >>  7) & 0x1ffffff))
+#define GETARG_UNPACK_b(i,n1,n2) ((int)((((mrb_code)(i)) >> (7+(n2))) & (((1<<(n1))-1))))
+#define GETARG_UNPACK_c(i,n1,n2) ((int)((((mrb_code)(i)) >> 7) & (((1<<(n2))-1))))
+#define GETARG_b(i)   GETARG_UNPACK_b(i,14,2)
+#define GETARG_c(i)   GETARG_UNPACK_c(i,14,2)
 
-#define RITE_MKOPCODE(op)  ((op) & 0x7f)
-#define RITE_MKARG_A(c)    ((mrb_code)((c) & 0x1ff) << 23)
-#define RITE_MKARG_B(c)    ((mrb_code)((c) & 0x1ff) << 14)
-#define RITE_MKARG_C(c)    (((c) & 0x7f) <<  7)
-#define RITE_MKARG_Bx(v)   ((mrb_code)((v) & 0xffff) << 7)
-#define RITE_MKARG_sBx(v)  RITE_MKARG_Bx((v)+RITE_MAXARG_sBx)
-#define RITE_MKARG_Ax(v)   ((mrb_code)((v) & 0x1ffffff) << 7)
-#define RITE_MKARG_PACK(b,n1,c,n2) ((((b) & ((1<<n1)-1)) << (7+n2))|(((c) & ((1<<n2)-1)) << 7))
-#define RITE_MKARG_bc(b,c) RITE_MKARG_PACK(b,14,c,2)
+#define MKOPCODE(op)  ((op) & 0x7f)
+#define MKARG_A(c)    ((mrb_code)((c) & 0x1ff) << 23)
+#define MKARG_B(c)    ((mrb_code)((c) & 0x1ff) << 14)
+#define MKARG_C(c)    (((c) & 0x7f) <<  7)
+#define MKARG_Bx(v)   ((mrb_code)((v) & 0xffff) << 7)
+#define MKARG_sBx(v)  MKARG_Bx((v)+MAXARG_sBx)
+#define MKARG_Ax(v)   ((mrb_code)((v) & 0x1ffffff) << 7)
+#define MKARG_PACK(b,n1,c,n2) ((((b) & ((1<<n1)-1)) << (7+n2))|(((c) & ((1<<n2)-1)) << 7))
+#define MKARG_bc(b,c) MKARG_PACK(b,14,c,2)
+
+#define MKOP_A(op,a)        (MKOPCODE(op)|MKARG_A(a))
+#define MKOP_AB(op,a,b)     (MKOP_A(op,a)|MKARG_B(b))
+#define MKOP_ABC(op,a,b,c)  (MKOP_AB(op,a,b)|MKARG_C(c))
+#define MKOP_ABx(op,a,bx)   (MKOP_A(op,a)|MKARG_Bx(bx))
+#define MKOP_Bx(op,bx)      (MKOPCODE(op)|MKARG_Bx(bx))
+#define MKOP_sBx(op,sbx)    (MKOPCODE(op)|MKARG_sBx(sbx))
+#define MKOP_AsBx(op,a,sbx) (MKOP_A(op,a)|MKARG_sBx(sbx))
+#define MKOP_Ax(op,ax)      (MKOPCODE(op)|MKARG_Ax(ax))
+#define MKOP_Abc(op,a,b,c)  (MKOP_A(op,a)|MKARG_bc(b,c))
 
 static int
-rite_get_opcode(mrb_code i)
+get_opcode(const mrb_code *i)
 {
-  return RITE_GET_OPCODE(i);
+  return GET_OPCODE(*i);
 }
 
 static int
-rite_getarg_A(mrb_code i)
+getarg_A(const mrb_code *i)
 {
-  return RITE_GETARG_A(i);
+  return GETARG_A(*i);
 }
 
 static int
-rite_getarg_B(mrb_code i)
+getarg_B(const mrb_code *i)
 {
-  return RITE_GETARG_B(i);
+  return GETARG_B(*i);
 }
 
 static int
-rite_getarg_C(mrb_code i)
+getarg_C(const mrb_code *i)
 {
-  return RITE_GETARG_C(i);
+  return GETARG_C(*i);
 }
 
 static int
-rite_getarg_Bx(mrb_code i)
+getarg_Bx(const mrb_code *i)
 {
-  return RITE_GETARG_Bx(i);
+  return GETARG_Bx(*i);
 }
 
 static int
-rite_getarg_sBx(mrb_code i)
+getarg_sBx(const mrb_code *i)
 {
-  return RITE_GETARG_sBx(i);
+  return GETARG_sBx(*i);
 }
 
 static int32_t
-rite_getarg_Ax(mrb_code i)
+getarg_Ax(const mrb_code *i)
 {
-  return RITE_GETARG_Ax(i);
+  return GETARG_Ax(*i);
 }
 
 static int
-rite_getarg_b(mrb_code i)
+getarg_b(const mrb_code *i)
 {
-  return RITE_GETARG_b(i);
+  return GETARG_b(*i);
 }
 
 static int
-rite_getarg_c(mrb_code i)
+getarg_c(const mrb_code *i)
 {
-  return RITE_GETARG_c(i);
+  return GETARG_c(*i);
 }
 
-static mrb_code
-rite_mkopcode(int op)
+static mrb_code *
+prev_op(mrb_code *i)
 {
-  return RITE_MKOPCODE(op);
-}
-
-static mrb_code
-rite_mkarg_A(int c)
-{
-  return RITE_MKARG_A(c);
-}
-
-static mrb_code
-rite_mkarg_B(int c)
-{
-  return RITE_MKARG_B(c);
-}
-
-static mrb_code
-rite_mkarg_C(int c)
-{
-  return RITE_MKARG_C(c);
-}
-
-static mrb_code
-rite_mkarg_Bx(int v)
-{
-  return RITE_MKARG_Bx(v);
-}
-
-static mrb_code
-rite_mkarg_sBx(int v)
-{
-  return RITE_MKARG_sBx(v);
-}
-
-static mrb_code
-rite_mkarg_Ax(int32_t v)
-{
-  return RITE_MKARG_Ax(v);
-}
-
-static mrb_code
-rite_mkarg_bc(int b, int c)
-{
-  return RITE_MKARG_bc(b,c);
+  return i - 1;
 }
 
 static int
-rite_mkop_lit_int(mrb_code *p, int a, mrb_int i)
+mkop_A(void *genop, void *p, int op, int a)
 {
-  if (i < RITE_MAXARG_sBx && i > -RITE_MAXARG_sBx) {
-    *p = rite_mkopcode(OP_LOADI) | rite_mkarg_A(a) | rite_mkarg_sBx(i);
-    return 1;
-  }
-  return 0;
-}
-
-static int
-rite_make_OP_CALL(mrb_code *p)
-{
-  p[0] = rite_mkopcode(OP_CALL) | rite_mkarg_A(0);
+  (*(GENOP)genop)(p, MKOPCODE(op)|MKARG_A(a));
   return 1;
 }
 
-static struct mrb_machine machine_rite =
+static int
+mkop_AB(void *genop, void *p, int op, int a, int b)
 {
-  .compiler_name    = RITE_COMPILER_NAME,
-  .compiler_version = RITE_COMPILER_VERSION,
+  (*(GENOP)genop)(p, MKOP_A(op,a)|MKARG_B(b));
+  return 1;
+}
 
-  .maxarg_Bx  = RITE_MAXARG_Bx,
-  .maxarg_sBx = RITE_MAXARG_sBx,
+static int
+mkop_ABC(void *genop, void *p, int op, int a, int b, int c)
+{
+  (*(GENOP)genop)(p, MKOP_AB(op,a,b)|MKARG_C(c));
+  return 1;
+}
 
-  .get_opcode = rite_get_opcode,
-  .getarg_A   = rite_getarg_A,
-  .getarg_B   = rite_getarg_B,
-  .getarg_C   = rite_getarg_C,
-  .getarg_Bx  = rite_getarg_Bx,
-  .getarg_sBx = rite_getarg_sBx,
-  .getarg_Ax  = rite_getarg_Ax,
-  .getarg_b   = rite_getarg_b,
-  .getarg_c   = rite_getarg_c,
+static int
+mkop_ABx(void *genop, void *p, int op, int a, int bx)
+{
+  (*(GENOP)genop)(p, MKOP_A(op,a)|MKARG_Bx(bx));
+  return 1;
+}
 
-  .mkopcode   = rite_mkopcode,
-  .mkarg_A    = rite_mkarg_A,
-  .mkarg_B    = rite_mkarg_B,
-  .mkarg_C    = rite_mkarg_C,
-  .mkarg_Bx   = rite_mkarg_Bx,
-  .mkarg_sBx  = rite_mkarg_sBx,
-  .mkarg_Ax   = rite_mkarg_Ax,
-  .mkarg_bc   = rite_mkarg_bc,
+static int
+mkop_Bx(void *genop, void *p, int op, int bx)
+{
+  (*(GENOP)genop)(p, MKOPCODE(op)|MKARG_Bx(bx));
+  return 1;
+}
 
-  .mkop_lit_int = rite_mkop_lit_int,
-  .make_OP_CALL = rite_make_OP_CALL,
+static int
+mkop_sBx(void *genop, void *p, int op, int sbx)
+{
+  (*(GENOP)genop)(p, MKOPCODE(op)|MKARG_sBx(sbx));
+  return 1;
+}
+
+static int
+mkop_AsBx(void *genop, void *p, int op, int a, int sbx)
+{
+  (*(GENOP)genop)(p, MKOP_A(op,a)|MKARG_sBx(sbx));
+  return 1;
+}
+
+static int
+mkop_Ax(void *genop, void *p, int op, int32_t ax)
+{
+  (*(GENOP)genop)(p, MKOPCODE(op)|MKARG_Ax(ax));
+  return 1;
+}
+
+static int
+mkop_Abc(void *genop, void *p, int op, int a, int b, int c)
+{
+  (*(GENOP)genop)(p, MKOP_A(op,a)|MKARG_bc(b,c));
+  return 1;
+}
+
+struct mrb_machine machine_rite =
+{
+  .compiler_name    = COMPILER_NAME,
+  .compiler_version = COMPILER_VERSION,
+
+  .maxarg_Bx  = MAXARG_Bx,
+  .maxarg_sBx = MAXARG_sBx,
+
+  .get_opcode = get_opcode,
+  .getarg_A   = getarg_A,
+  .getarg_B   = getarg_B,
+  .getarg_C   = getarg_C,
+  .getarg_Bx  = getarg_Bx,
+  .getarg_sBx = getarg_sBx,
+  .getarg_Ax  = getarg_Ax,
+  .getarg_b   = getarg_b,
+  .getarg_c   = getarg_c,
+
+  .prev_op   = prev_op,
+
+  .mkop_A    = mkop_A,
+  .mkop_AB   = mkop_AB,
+  .mkop_ABC  = mkop_ABC,
+  .mkop_ABx  = mkop_ABx,
+  .mkop_Bx   = mkop_Bx,
+  .mkop_sBx  = mkop_sBx,
+  .mkop_AsBx = mkop_AsBx,
+  .mkop_Ax   = mkop_Ax,
+  .mkop_Abc  = mkop_Abc,
 };
 
-#ifdef MACHINE_RUBIC
-/*         (Rubic rubic VM)          */
-/* instructions: packed into rubic's */
-/*               custom instruction */
-/* -------------------------------  */
-/*     A:B:C:OP:uOP = 5: 5: 5: 7: 6 */
-/*      A:Bx:OP:uOP =    5:10: 7: 6 */
-/*        Ax:OP:uOP =      15: 7: 6 */
-/*   A:Bz:Cz:OP:uOP = 5: 8: 2: 7: 6 */
-/* -------------------------------  */
-/* jump instructions are consist of */
-/* custom instruction and rubic stan-*/
-/* dard instruction.                */
-
-#define RUBIC_COMPILER_NAME      "RbcN"  /* Rubic Nios2 */
-#define RUBIC_COMPILER_VERSION   "0000"
-
-#define RUBIC_MAXARG_Bx    (0x3ff)
-#define RUBIC_MAXARG_sBx   ((RITE_MAXARG_Bx+1)>>1)
-#define NIOS2_CUSTOM_uOP   0x32    /* rubic custom instruction */
-#define RUBIC_RETVAL_IDX   2       /* r2: return value */
-#define RUBIC_WITH_RETVAL  ((mrb_code)(RUBIC_RETVAL_IDX<<17)|(1<<14)) /* writerc=1 */
-#define NIOS2_READRA        (1<<16)
-#define NIOS2_READRB        (1<<15)
-#define NIOS2_WRITERC       (1<<14)
-
-static int
-rubic_get_opcode(mrb_code i)
-{
-  return (i >> 6) & 0x7f;
-}
-
-static int
-rubic_getarg_A(mrb_code i)
-{
-  return (i >> 27) & 0x1f;
-}
-
-static int
-rubic_getarg_B(mrb_code i)
-{
-  return (i >> 22) & 0x1f;
-}
-
-static int
-rubic_getarg_C(mrb_code i)
-{
-  return (i >> 17) & 0x1f;
-}
-
-static int
-rubic_getarg_Bx(mrb_code i)
-{
-  return (i >> 17) & 0x3ff;
-}
-
-static int
-rubic_getarg_sBx(mrb_code i)
-{
-  return rubic_getarg_Bx(i) - RUBIC_MAXARG_sBx;
-}
-
-static int32_t
-rubic_getarg_Ax(mrb_code i)
-{
-  return (i >> 17) & 0x7fff;
-}
-
-static int
-rubic_getarg_b(mrb_code i)
-{
-  return (i >> 19) & 0xff;
-}
-
-static int
-rubic_getarg_c(mrb_code i)
-{
-  return (i >> 17) & 0x3;
-}
-
-static mrb_code
-rubic_mkopcode(int op)
-{
-  return ((op & 0x7f) << 6) | NIOS2_CUSTOM_uOP;
-}
-
-static mrb_code
-rubic_mkarg_A(int c)
-{
-  return (mrb_code)(c & 0x1f) << 27;
-}
-
-static mrb_code
-rubic_mkarg_B(int c)
-{
-  return (mrb_code)(c & 0x1f) << 22;
-}
-
-static mrb_code
-rubic_mkarg_C(int c)
-{
-  return (mrb_code)(c & 0x1f) << 17;
-}
-
-static mrb_code
-rubic_mkarg_Bx(int v)
-{
-  return (mrb_code)(v & 0x3ff) << 17;
-}
-
-static mrb_code
-rubic_mkarg_sBx(int v)
-{
-  return rubic_mkarg_Bx(v + RUBIC_MAXARG_sBx);
-}
-
-static mrb_code
-rubic_mkarg_Ax(int32_t v)
-{
-  return (mrb_code)(v & 0x7fff) << 17;
-}
-
-static mrb_code
-rubic_mkarg_bc(int b, int c)
-{
-  return ((mrb_code)(b & 0xff) << 19) | ((mrb_code)(b & 0x3) << 17);
-}
-
-static int
-rubic_mkop_lit_int(mrb_code *p, int a, mrb_int i)
-{
-  int len = 0;
-  /* ori r2, r0, (i[14:0]<<1)|1 */
-  *p++ = (0 << 27) | (2 << 22) | ((((i & 0x7fff) << 1) + 1) << 6) | 0x14;
-  ++len;
-  if(i >= (1<<15) || i < -(1<<15)) {
-    /* orih r2, r2, i[30:15] */
-    *p++ = (2 << 27) | (2 << 22) | ((((i & 0x7fff8000) >> 14) + 1) << 6) | 0x34;
-    ++len;
-  }
-  *p++ = rubic_mkopcode(OP_REGMOVE) | rubic_mkarg_A(2) | NIOS2_READRA | rubic_mkarg_C(a);
-  return ++len;
-}
-
-static int
-rubic_make_OP_CALL(mrb_code* p)
-{
-  p[0] = rubic_mkopcode(OP_CALL) | RUBIC_WITH_RETVAL;
-  p[1] = (RUBIC_RETVAL_IDX << 27) | (0x0d << 11) | (0x3a); // jmp r*
-  return 2;
-}
-
-static struct mrb_machine machine_rubic =
-{
-  .compiler_name    = RUBIC_COMPILER_NAME,
-  .compiler_version = RUBIC_COMPILER_VERSION,
-
-  .maxarg_Bx  = RUBIC_MAXARG_Bx,
-  .maxarg_sBx = RUBIC_MAXARG_sBx,
-
-  .get_opcode = rubic_get_opcode,
-  .getarg_A   = rubic_getarg_A,
-  .getarg_B   = rubic_getarg_B,
-  .getarg_C   = rubic_getarg_C,
-  .getarg_Bx  = rubic_getarg_Bx,
-  .getarg_sBx = rubic_getarg_sBx,
-  .getarg_Ax  = rubic_getarg_Ax,
-  .getarg_b   = rubic_getarg_b,
-  .getarg_c   = rubic_getarg_c,
-
-  .mkopcode   = rubic_mkopcode,
-  .mkarg_A    = rubic_mkarg_A,
-  .mkarg_B    = rubic_mkarg_B,
-  .mkarg_C    = rubic_mkarg_C,
-  .mkarg_Bx   = rubic_mkarg_Bx,
-  .mkarg_sBx  = rubic_mkarg_sBx,
-  .mkarg_Ax   = rubic_mkarg_Ax,
-  .mkarg_bc   = rubic_mkarg_bc,
-
-  .mkop_lit_int = rubic_mkop_lit_int,
-  .make_OP_CALL = rubic_make_OP_CALL,
-};
-#endif
-
-int
-mrb_set_machine(mrb_state *mrb, const char *name)
-{
-  if(strcmp(name, "rite") == 0) {
-    mrb->machine = &machine_rite;
-    return 0;
-  }
-#ifdef MACHINE_RUBIC
-  else if(strcmp(name, "rubic") == 0) {
-    mrb->machine = &machine_rubic;
-    return 0;
-  }
-#endif
-
-  return -1;
-}

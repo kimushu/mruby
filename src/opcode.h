@@ -7,37 +7,37 @@
 #ifndef OPCODE_H
 #define OPCODE_H
 
-#define MAXARG_Bx(s)    (s->machine->maxarg_Bx)
-#define MAXARG_sBx(s)   (s->machine->maxarg_sBx)
-
-#define GET_OPCODE(s,i) (s->machine->get_opcode(i))
-#define GETARG_A(s,i)   (s->machine->getarg_A(i))
-#define GETARG_B(s,i)   (s->machine->getarg_B(i))
-#define GETARG_C(s,i)   (s->machine->getarg_C(i))
-#define GETARG_Bx(s,i)  (s->machine->getarg_Bx(i))
-#define GETARG_sBx(s,i) (s->machine->getarg_sBx(i))
-#define GETARG_Ax(s,i)  (s->machine->getarg_Ax(i))
-#define GETARG_b(s,i)   (s->machine->getarg_b(i))
-#define GETARG_c(s,i)   (s->machine->getarg_c(i))
-
-#define MKOPCODE(s,op)  (s->machine->mkopcode(op))
-#define MKARG_A(s,c)    (s->machine->mkarg_A(c))
-#define MKARG_B(s,c)    (s->machine->mkarg_B(c))
-#define MKARG_C(s,c)    (s->machine->mkarg_C(c))
-#define MKARG_Bx(s,v)   (s->machine->mkarg_Bx(v))
-#define MKARG_sBx(s,v)  (s->machine->mkarg_sBx(v))
-#define MKARG_Ax(s,v)   (s->machine->mkarg_Ax(v))
-#define MKARG_bc(s,b,c) (s->machine->mkarg_bc(b,c))
-
-#define MKOP_A(s,op,a)        (MKOPCODE(s,op)|MKARG_A(s,a))
-#define MKOP_AB(s,op,a,b)     (MKOP_A(s,op,a)|MKARG_B(s,b))
-#define MKOP_ABC(s,op,a,b,c)  (MKOP_AB(s,op,a,b)|MKARG_C(s,c))
-#define MKOP_ABx(s,op,a,bx)   (MKOP_A(s,op,a)|MKARG_Bx(s,bx))
-#define MKOP_Bx(s,op,bx)      (MKOPCODE(s,op)|MKARG_Bx(s,bx))
-#define MKOP_sBx(s,op,sbx)    (MKOPCODE(s,op)|MKARG_sBx(s,sbx))
-#define MKOP_AsBx(s,op,a,sbx) (MKOP_A(s,op,a)|MKARG_sBx(s,sbx))
-#define MKOP_Ax(s,op,ax)      (MKOPCODE(s,op)|MKARG_Ax(s,ax))
-#define MKOP_Abc(s,op,a,b,c)  (MKOP_A(s,op,a)|MKARG_bc(s,b,c))
+// #define MAXARG_Bx(s)    (s->machine->maxarg_Bx)
+// #define MAXARG_sBx(s)   (s->machine->maxarg_sBx)
+// 
+// #define GET_OPCODE(s,i) (s->machine->get_opcode(i))
+// #define GETARG_A(s,i)   (s->machine->getarg_A(i))
+// #define GETARG_B(s,i)   (s->machine->getarg_B(i))
+// #define GETARG_C(s,i)   (s->machine->getarg_C(i))
+// #define GETARG_Bx(s,i)  (s->machine->getarg_Bx(i))
+// #define GETARG_sBx(s,i) (s->machine->getarg_sBx(i))
+// #define GETARG_Ax(s,i)  (s->machine->getarg_Ax(i))
+// #define GETARG_b(s,i)   (s->machine->getarg_b(i))
+// #define GETARG_c(s,i)   (s->machine->getarg_c(i))
+// 
+// #define MKOPCODE(s,op)  (s->machine->mkopcode(op))
+// #define MKARG_A(s,c)    (s->machine->mkarg_A(c))
+// #define MKARG_B(s,c)    (s->machine->mkarg_B(c))
+// #define MKARG_C(s,c)    (s->machine->mkarg_C(c))
+// #define MKARG_Bx(s,v)   (s->machine->mkarg_Bx(v))
+// #define MKARG_sBx(s,v)  (s->machine->mkarg_sBx(v))
+// #define MKARG_Ax(s,v)   (s->machine->mkarg_Ax(v))
+// #define MKARG_bc(s,b,c) (s->machine->mkarg_bc(b,c))
+// 
+// #define MKOP_A(s,op,a)        (MKOPCODE(s,op)|MKARG_A(s,a))
+// #define MKOP_AB(s,op,a,b)     (MKOP_A(s,op,a)|MKARG_B(s,b))
+// #define MKOP_ABC(s,op,a,b,c)  (MKOP_AB(s,op,a,b)|MKARG_C(s,c))
+// #define MKOP_ABx(s,op,a,bx)   (MKOP_A(s,op,a)|MKARG_Bx(s,bx))
+// #define MKOP_Bx(s,op,bx)      (MKOPCODE(s,op)|MKARG_Bx(s,bx))
+// #define MKOP_sBx(s,op,sbx)    (MKOPCODE(s,op)|MKARG_sBx(s,sbx))
+// #define MKOP_AsBx(s,op,a,sbx) (MKOP_A(s,op,a)|MKARG_sBx(s,sbx))
+// #define MKOP_Ax(s,op,ax)      (MKOPCODE(s,op)|MKARG_Ax(s,ax))
+// #define MKOP_Abc(s,op,a,b,c)  (MKOP_A(s,op,a)|MKARG_bc(s,b,c))
 
 enum {
 OP_NOP=0,/*                                                             */
@@ -147,5 +147,8 @@ OP_RSVD5,/*             reserved instruction #5                         */
 #define OP_R_NORMAL 0
 #define OP_R_BREAK  1
 #define OP_R_RETURN 2
+
+extern void
+writeop(mrb_code **p, mrb_code i);
 
 #endif  /* OPCODE_H */

@@ -135,7 +135,7 @@ mrb_proc_arity(mrb_state *mrb, mrb_value self)
 {
   struct RProc *p = mrb_proc_ptr(self);
   mrb_code *iseq = mrb_proc_iseq(mrb, p);
-  mrb_aspec aspec = GETARG_Ax(mrb, *iseq);
+  mrb_aspec aspec = mrb->machine->getarg_Ax(iseq);
   int ma, ra, pa, arity;
   
   ma = MRB_ASPEC_REQ(aspec);
@@ -185,11 +185,12 @@ mrb_init_proc(mrb_state *mrb)
   if ( call_iseq == NULL || call_irep == NULL )
     return;
 
+  mrb_code *p = call_iseq;
   *call_irep = mrb_irep_zero;
   call_irep->flags = MRB_ISEQ_NO_FREE;
   call_irep->idx = -1;
-  call_irep->iseq = call_iseq;
-  call_irep->ilen = mrb->machine->make_OP_CALL(call_iseq);
+  call_irep->iseq = p;
+  call_irep->ilen = mrb->machine->mkop_A(writeop, &p, OP_CALL, 0);
 
   mrb->proc_class = mrb_define_class(mrb, "Proc", mrb->object_class);
   MRB_SET_INSTANCE_TT(mrb->proc_class, MRB_TT_PROC);
