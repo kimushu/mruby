@@ -155,6 +155,8 @@ typedef struct mrb_state {
   struct RClass *eException_class;
   struct RClass *eStandardError_class;
 
+  const char *(*convert_machine)(struct mrb_state *mrb, struct mrb_irep *irep);
+
   void *ud; /* auxiliary data */
 } mrb_state;
 

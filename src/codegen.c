@@ -2407,13 +2407,21 @@ scope_finish(codegen_scope *s)
 
   irep->flags = 0;
   if (s->iseq) {
-    irep->iseq = (mrb_code *)codegen_realloc(s, s->iseq, sizeof(mrb_code)*s->pc);
-    irep->ilen = s->pc;
-    if (s->lines) {
-      irep->lines = (uint16_t *)codegen_realloc(s, s->lines, sizeof(uint16_t)*s->pc);
+    if (mrb->convert_machine) {
+      const char *errmsg;
+      irep->ilen = s->pc;
+      errmsg = (*mrb->convert_machine)(mrb, irep);
+      if (errmsg) codegen_error(s, errmsg);
     }
     else {
-      irep->lines = 0;
+      irep->iseq = (mrb_code *)codegen_realloc(s, s->iseq, sizeof(mrb_code)*s->pc);
+      irep->ilen = s->pc;
+      if (s->lines) {
+        irep->lines = (uint16_t *)codegen_realloc(s, s->lines, sizeof(uint16_t)*s->pc);
+      }
+      else {
+        irep->lines = 0;
+      }
     }
   }
   irep->pool = (mrb_value *)codegen_realloc(s, irep->pool, sizeof(mrb_value)*irep->plen);
@@ -2861,4 +2869,16 @@ mrb_generate_code(mrb_state *mrb, parser_state *p)
   if (n < 0) return n;
 
   return start;
+}
+
+int
+mrb_set_machine(mrb_state *mrb, const char *name)
+{
+  if (!name || strcmp(name, "rite") == 0) {
+    mrb->convert_machine = NULL;
+  }
+  else {
+    return -1;
+  }
+  return 0;
 }

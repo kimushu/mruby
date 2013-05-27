@@ -156,6 +156,7 @@ struct mrb_parser_state* mrb_parse_file(mrb_state*,FILE*,mrbc_context*);
 struct mrb_parser_state* mrb_parse_string(mrb_state*,const char*,mrbc_context*);
 struct mrb_parser_state* mrb_parse_nstring(mrb_state*,const char*,int,mrbc_context*);
 int mrb_generate_code(mrb_state*, struct mrb_parser_state*);
+int mrb_set_machine(mrb_state*, const char*);
 
 /* program load functions */
 #ifdef ENABLE_STDIO
