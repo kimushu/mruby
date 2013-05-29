@@ -14,6 +14,7 @@ MRuby::Build.new do |conf|
   # include the default GEMs
   conf.gembox 'default'
 
+  conf.cc.flags << "-DMRB_CONVERTER_NIOS2"
   # C compiler settings
   # conf.cc do |cc|
   #   cc.command = ENV['CC'] || 'gcc'
