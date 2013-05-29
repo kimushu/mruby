@@ -37,7 +37,7 @@ usage(const char *name)
   "-v           print version number, then turn on verbose mode",
   "-g           produce debugging information",
   "-B<symbol>   binary <symbol> output in C language format",
-  "-M<machine>  select machine type of VM (default: rite)",
+  "-m<machine>  select machine type of VM (default: rite)",
   "--verbose    run at verbose mode",
   "--version    print the version",
   "--copyright  print the copyright",
@@ -109,7 +109,7 @@ parse_args(mrb_state *mrb, int argc, char **argv, struct mrbc_args *args)
           return -1;
         }
         break;
-      case 'M':
+      case 'm':
         if (argv[i][2] == '\0' && argv[i+1]) {
           i++;
           args->machinename = argv[i];

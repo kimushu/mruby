@@ -170,6 +170,11 @@ mrb_value mrb_load_file_cxt(mrb_state*,FILE*, mrbc_context *cxt);
 mrb_value mrb_load_string_cxt(mrb_state *mrb, const char *s, mrbc_context *cxt);
 mrb_value mrb_load_nstring_cxt(mrb_state *mrb, const char *s, int len, mrbc_context *cxt);
 
+/* converter functions */
+#ifdef MRB_CONVERTER_NIOS2
+const char *mrb_convert_to_nios2(mrb_state *mrb, struct mrb_irep *irep);
+#endif
+
 #if defined(__cplusplus)
 }  /* extern "C" { */
 #endif

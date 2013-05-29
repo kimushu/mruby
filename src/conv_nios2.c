@@ -55,10 +55,15 @@ static const char *convert_irep(convert_scope *s)
 {
   mrb_code i, *p;
   uint32_t sbx, sign;
+  mrb_code *src_pc;
+  size_t src_ilen;
 
-  for(; s->rite_ilen > 0; --s->rite_ilen, ++s->rite_pc) {
-    i = *s->rite_pc;
-    *s->rite_pc = MKOP_Ax(OP_NOP, s->pc << 4);
+  /* convert instructions */
+  for(src_pc = s->rite_pc, src_ilen = s->rite_ilen;
+      src_ilen > 0;
+      --src_ilen, ++src_pc) {
+    i = *src_pc;
+    *src_pc = MKOP_Ax(OP_NOP, s->pc << 4);
 
     switch(GET_OPCODE(i)) {
     case OP_NOP:
@@ -237,7 +242,7 @@ static const char *convert_irep(convert_scope *s)
       /* sBx     pc+=sBx */
       p = allocseq(s, 1);
       p[0] = NIOS2_br(GETARG_sBx(i)); /* placeholder */
-      *s->rite_pc |= MKARG_Ax(1);
+      *s->rite_pc |= MKARG_Ax(0+1);
       break;
     case OP_JMPIF:
       /* A sBx   if R(A) pc+=sBx */
@@ -246,7 +251,7 @@ static const char *convert_irep(convert_scope *s)
       p[1] = NIOS2_rori(2, 2, MRB_FIXNUM_SHIFT);
       p[2] = NIOS2_cmpleui(2, 2, MRB_Qfalse>>MRB_FIXNUM_SHIFT);
       p[3] = NIOS2_beq(0, 2, GETARG_sBx(i)); /* placeholder */
-      *s->rite_pc |= MKARG_Ax(4);
+      *s->rite_pc |= MKARG_Ax(3+1);
       break;
     case OP_JMPNOT:
       /* A sBx   if !R(A) pc+=sBx */
@@ -255,16 +260,16 @@ static const char *convert_irep(convert_scope *s)
       p[1] = NIOS2_rori(2, 2, MRB_FIXNUM_SHIFT);
       p[2] = NIOS2_cmpleui(2, 2, MRB_Qfalse>>MRB_FIXNUM_SHIFT);
       p[3] = NIOS2_bne(0, 2, GETARG_sBx(i)); /* placeholder */
-      *s->rite_pc |= MKARG_Ax(4);
+      *s->rite_pc |= MKARG_Ax(3+1);
       break;
     case OP_ONERR:
       /* sBx     rescue_push(pc+sBx) */
       p = allocseq(s, 4);
       p[0] = NIOS2_nextpc(4);
       p[1] = NIOS2_ldw(2, VMM(rescue_push), MRBVM_REG);
-      p[2] = NIOS2_movi(5, GETARG_sBx(i));
+      p[2] = NIOS2_movi(5, GETARG_sBx(i));  /* placeholder */
       p[3] = NIOS2_callr(2);
-      *s->rite_pc |= MKARG_Ax(3);
+      *s->rite_pc |= MKARG_Ax(2+1);
       break;
     case OP_RESCUE:
       /* A       clear(exc); R(A) := exception (ignore when A=0) */
@@ -697,14 +702,64 @@ static const char *convert_irep(convert_scope *s)
       break;
     case OP_TCLASS:
       /* A       R(A) := target_class */
+      p = allocseq(s, 3);
       p[0] = NIOS2_ldw(2, VMM(target_class), MRBVM_REG);
       p[1] = NIOS2_callr(2);
       p[2] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      break;
+    case OP_DEBUG:
+      /* A       print R(A) */
+      p = allocseq(s, 3);
+      p[0] = NIOS2_ldw(4, GETARG_A(i)*4, STACK_REG);
+      p[1] = NIOS2_ldw(2, VMM(raise), MRBVM_REG);
+      p[2] = NIOS2_callr(2);
+      break;
+    case OP_STOP:
+      /*         stop VM */
+      p = allocseq(s, 2);
+      p[0] = NIOS2_ldw(2, VMM(stop_vm), MRBVM_REG);
+      p[1] = NIOS2_callr(2);
+      break;
+    case OP_ERR:
+      /* Bx      raise RuntimeError with message Lit(Bx) */
+      p = allocseq(s, 6);
+      p[0] = NIOS2_ldw(4, GETARG_Bx(i), STACK_REG);
+      p[1] = NIOS2_ldw(2, VMM(load_lit), MRBVM_REG);
+      p[2] = NIOS2_callr(2);
+      p[3] = NIOS2_mov(4, 2);
+      p[4] = NIOS2_ldw(2, VMM(raise_err), MRBVM_REG);
+      p[5] = NIOS2_callr(2);
       break;
     default:
       return "unknown instruction";
     }
   }
+
+  /* fill relative jumps */
+  for(src_pc = s->rite_pc, src_ilen = s->rite_ilen;
+      src_ilen > 0;
+      --src_ilen, ++src_pc) {
+    int pos;
+    uint16_t from_pc, to_pc;
+    int16_t sbx;
+    mrb_code *inst_update;
+    i = *src_pc;
+
+    pos = GETARG_Ax(i) & 15;
+    if (pos == 0) {
+      continue;
+    }
+
+    from_pc = (GETARG_Ax(i) >> 4) + pos;
+    inst_update = &s->new_iseq[from_pc - 1];
+    sbx = NIOS2_GET_IMM16(*inst_update);
+    to_pc = GETARG_Ax(src_pc[sbx]) >> 4;
+
+    *inst_update = (*inst_update & ~NIOS2_IMM16(0xffff)) |
+      NIOS2_IMM16(to_pc - from_pc);
+  }
+
+  return NULL;
 }
 
 const char *
