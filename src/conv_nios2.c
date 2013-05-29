@@ -43,6 +43,7 @@ typedef struct scope
 static mrb_code *allocseq(convert_scope *s, size_t space);
 static const char *convert_iseq(convert_scope *s);
 static const char *convert_irep(mrb_state *mrb, mrb_irep *irep);
+static void codedump(mrb_state *mrb, int n);
 
 struct mrb_machine machine_nios2 = {
   NIOS2_BINARY_IDENTIFIER,
@@ -50,6 +51,73 @@ struct mrb_machine machine_nios2 = {
   NIOS2_COMPILER_NAME,
   NIOS2_COMPILER_VERSION,
   convert_irep,
+  codedump,
+};
+
+enum nios2_disasm_format {
+  fmt_none,
+  fmt_opx,
+  fmt_cab,
+  fmt_basv,
+  fmt_bauv,
+  fmt_absv,
+  fmt_sv,
+  fmt_i5,
+  fmt_i26,
+  fmt_a,
+  fmt_cust,
+  fmt_sva,
+  fmt_ldst,
+  fmt_ca,
+  fmt_buv,
+  fmt_bsv,
+  fmt_c,
+  fmt_cn,
+  fmt_cai5,
+  fmt_na,
+};
+
+struct nios2_disasm_map {
+  const char *mnemonic;
+  enum nios2_disasm_format format;
+};
+
+static const struct nios2_disasm_map disasm_map[] = {
+  {"call",  fmt_i26}, {"jmpi",  fmt_i26}, {NULL,    fmt_none},{"ldbu",  fmt_ldst},
+  {"addi",  fmt_basv},{"stb",   fmt_ldst},{"br",    fmt_sv},  {"ldb",   fmt_ldst},
+  {"cmpgei",fmt_basv},{NULL,    fmt_none},{NULL,    fmt_none},{"ldhu",  fmt_ldst},
+  {"andi",  fmt_bauv},{"sth",   fmt_ldst},{"bge",   fmt_absv},{"ldh",   fmt_ldst},
+  {"cmplti",fmt_basv},{NULL,    fmt_none},{NULL,    fmt_none},{"initda",fmt_sva},
+  {"ori",   fmt_bauv},{"stw",   fmt_ldst},{"blt",   fmt_absv},{"ldw",   fmt_ldst},
+  {"cmpnei",fmt_basv},{NULL,    fmt_none},{NULL,    fmt_none},{"flushda",fmt_sva},
+  {"xori",  fmt_bauv},{NULL,    fmt_none},{"bne",   fmt_absv},{NULL,    fmt_none},
+  {"cmpeqi",fmt_basv},{NULL,    fmt_none},{NULL,    fmt_none},{"ldbuio",fmt_ldst},
+  {"muli",  fmt_basv},{"stbio", fmt_ldst},{"beq",   fmt_absv},{"ldbio", fmt_ldst},
+  {"cmpgeui",fmt_basv},{NULL,   fmt_none},{NULL,    fmt_none},{"ldhuio",fmt_ldst},
+  {"andhi", fmt_bauv},{"sthio", fmt_ldst},{"bgeu",  fmt_absv},{"ldhio", fmt_ldst},
+  {"cmpltui",fmt_basv},{NULL,   fmt_none},{"custom",fmt_cust},{"initd", fmt_sva},
+  {"orhi",  fmt_bauv},{"stwio", fmt_ldst},{"bltu",  fmt_absv},{"ldwio", fmt_ldst},
+  {"rdprs", fmt_basv},{NULL,    fmt_none},{NULL,    fmt_opx}, {"flushd",fmt_sva},
+  {"xorhi", fmt_bauv},{NULL,    fmt_none},{NULL,    fmt_opx}, {NULL,    fmt_none},
+};
+
+static const struct nios2_disasm_map disasm_mapx[] = {
+  {NULL,    fmt_none},{"eret",  fmt_none},{"roli",  fmt_cai5},{"rol",   fmt_cab},
+  {"flushp",fmt_none},{"ret",   fmt_none},{"nor",   fmt_cab}, {"mulxuu",fmt_cab},
+  {"cmpge", fmt_cab}, {"breg",  fmt_none},{NULL,    fmt_none},{"ror",   fmt_cab},
+  {"flushi",fmt_a},   {"jmp",   fmt_a},   {"and",   fmt_cab}, {NULL,    fmt_none},
+  {"cmplt", fmt_cab}, {NULL,    fmt_none},{"slli",  fmt_cai5},{"sll",   fmt_cab},
+  {"wrprs", fmt_ca},  {NULL,    fmt_none},{"or",    fmt_cab}, {"mulxsu",fmt_cab},
+  {"cmpne", fmt_cab}, {NULL,    fmt_none},{"srli",  fmt_cai5},{"srl",   fmt_cab},
+  {"nextpc",fmt_c},   {"callr", fmt_a},   {"xor",   fmt_cab}, {"mulxss",fmt_cab},
+  {"cmpeq", fmt_cab}, {NULL,    fmt_none},{NULL,    fmt_none},{NULL,    fmt_none},
+  {"divu",  fmt_cab}, {"div",   fmt_cab}, {"rdctl", fmt_cn},  {"mul",   fmt_cab},
+  {"cmpgeu",fmt_cab}, {"initi", fmt_a},   {NULL,    fmt_none},{NULL,    fmt_none},
+  {NULL,    fmt_none},{"trap",  fmt_i5},  {"wrctl", fmt_na},  {NULL,    fmt_none},
+  {"cmpltu",fmt_cab}, {"add",   fmt_cab}, {NULL,    fmt_none},{NULL,    fmt_none},
+  {"break", fmt_i5},  {NULL,    fmt_none},{"sync",  fmt_none},{NULL,    fmt_none},
+  {NULL,    fmt_none},{"sub",   fmt_cab}, {"srai",  fmt_cai5},{"sra",   fmt_cab},
+  {NULL,    fmt_none},{NULL,    fmt_none},{NULL,    fmt_none},{NULL,    fmt_none},
 };
 
 static mrb_code *
@@ -804,6 +872,101 @@ convert_irep(mrb_state *mrb, mrb_irep *irep)
     mrb_free(mrb, scope.new_iseq);
   }
   return errmsg;
+}
+
+static void
+codedump(mrb_state *mrb, int n)
+{
+#ifdef ENABLE_STDIO
+  mrb_irep *irep = mrb->irep[n];
+  int i;
+  mrb_code c;
+  const struct nios2_disasm_map *map;
+
+  if (!irep) return;
+  printf("irep %d nregs=%d nlocals=%d pools=%d syms=%d\n", n,
+         irep->nregs, irep->nlocals, (int)irep->plen, (int)irep->slen);
+  for (i=0; i<irep->ilen; i++) {
+    c = irep->iseq[i];
+    printf("%03d 0x%08x ", i, c);
+    map = disasm_map + NIOS2_GET_OP(c);
+L_RETRY:
+    switch (map->format) {
+    case fmt_none:
+      if (map->mnemonic) {
+        printf("%s\n", map->mnemonic);
+      }
+      else {
+        printf("unknown\n");
+      }
+      break;
+    case fmt_opx:
+      map = disasm_mapx + NIOS2_GET_OPX(c);
+      goto L_RETRY;
+    case fmt_cab:
+      printf("%-8sr%d, r%d, r%d\n", map->mnemonic,
+        NIOS2_GET_C(c), NIOS2_GET_A(c), NIOS2_GET_B(c));
+      break;
+    case fmt_basv:
+      printf("%-8sr%d, r%d, %d\n", map->mnemonic,
+        NIOS2_GET_B(c), NIOS2_GET_A(c), (int16_t)NIOS2_GET_IMM16(c));
+      break;
+    case fmt_bauv:
+      printf("%-8sr%d, r%d, 0x%04x\n", map->mnemonic,
+        NIOS2_GET_B(c), NIOS2_GET_A(c), NIOS2_GET_IMM16(c));
+      break;
+    case fmt_absv:
+      printf("%-8sr%d, r%d, %d\n", map->mnemonic,
+        NIOS2_GET_A(c), NIOS2_GET_B(c), (int16_t)NIOS2_GET_IMM16(c));
+      break;
+    case fmt_sv:
+      printf("%-8s%d\n", map->mnemonic, (int16_t)NIOS2_GET_IMM16(c));
+      break;
+    case fmt_i5:
+      printf("%-8s%d\n", map->mnemonic, NIOS2_GET_IMM5(c));
+      break;
+    case fmt_i26:
+      printf("%-8s0x%07x\n", map->mnemonic, NIOS2_GET_IMM26(c));
+      break;
+    case fmt_a:
+      printf("%-8sr%d\n", map->mnemonic, NIOS2_GET_A(c));
+      break;
+    case fmt_cust:
+      /* TODO */
+      break;
+    case fmt_sva:
+      printf("%-8s%d, r%d\n", map->mnemonic,
+        (int16_t)NIOS2_GET_IMM16(c), NIOS2_GET_A(c));
+      break;
+    case fmt_ldst:
+      printf("%-8sr%d, %d(r%d)\n", map->mnemonic,
+        NIOS2_GET_B(c), (int16_t)NIOS2_GET_IMM16(c), NIOS2_GET_A(c));
+      break;
+    case fmt_ca:
+      printf("%-8sr%d, r%d\n", map->mnemonic,
+        NIOS2_GET_C(c), NIOS2_GET_A(c));
+      break;
+    case fmt_buv:
+      printf("%-8sr%d, 0x%04x\n", map->mnemonic,
+        NIOS2_GET_B(c), NIOS2_GET_IMM16(c));
+      break;
+    case fmt_bsv:
+      printf("%-8sr%d, %d\n", map->mnemonic,
+        NIOS2_GET_B(c), (int16_t)NIOS2_GET_IMM16(c));
+      break;
+    case fmt_c:
+      printf("%-8sr%d\n", map->mnemonic, NIOS2_GET_C(c));
+      break;
+    case fmt_cn:
+      break;
+    case fmt_cai5:
+      break;
+    case fmt_na:
+      break;
+    }
+  }
+  printf("\n");
+#endif
 }
 
 #endif  /* MRB_CONVERTER_NIOS2 */

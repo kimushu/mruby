@@ -14,7 +14,14 @@
 #define NIOS2_IMM5(i)         (((uint32_t)(i)&0x1f)<<6)
 #define NIOS2_OP(i)           (((uint32_t)(i)&0x3f))
 
+#define NIOS2_GET_IMM26(i)    (((i)>>6)&0x3ffffff)
+#define NIOS2_GET_A(i)        (((i)>>27)&0x1f)
+#define NIOS2_GET_B(i)        (((i)>>22)&0x1f)
+#define NIOS2_GET_C(i)        (((i)>>17)&0x1f)
 #define NIOS2_GET_IMM16(i)    (((i)>>6)&0xffff)
+#define NIOS2_GET_OPX(i)      (((i)>>11)&0x3f)
+#define NIOS2_GET_IMM5(i)     (((i)>>6)&0x1f)
+#define NIOS2_GET_OP(i)       (((i)&0x3f))
 
 #define NIOS2_add(c,a,b)      (NIOS2_OP(0x3a)|NIOS2_OPX(0x31)|NIOS2_A(a)|NIOS2_B(b)|NIOS2_C(c))
 #define NIOS2_addi(b,a,sv)    (NIOS2_OP(0x04)|NIOS2_IMM16(sv)|NIOS2_A(a)|NIOS2_B(b))

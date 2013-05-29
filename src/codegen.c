@@ -2835,7 +2835,12 @@ codedump_all(mrb_state *mrb, int start)
   size_t i;
 
   for (i=start; i<mrb->irep_len; i++) {
-    codedump(mrb, i);
+    if (mrb->machine) {
+      (*mrb->machine->codedump)(mrb, i);
+    }
+    else {
+      codedump(mrb, i);
+    }
   }
 }
 

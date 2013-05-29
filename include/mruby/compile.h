@@ -152,6 +152,7 @@ struct mrb_machine {
   char compiler_name[4];
   char compiler_version[4];
   const char *(*convert_irep)(mrb_state *mrb, struct mrb_irep *irep);
+  void (*codedump)(mrb_state *mrb, int n);
 };
 #ifdef MRB_CONVERTER_NIOS2
 extern struct mrb_machine machine_nios2;
