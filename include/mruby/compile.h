@@ -145,6 +145,18 @@ struct mrb_parser_state {
   jmp_buf jmp;
 };
 
+/* machines */
+struct mrb_machine {
+  char binary_identifier[4];
+  char binary_format_ver[4];
+  char compiler_name[4];
+  char compiler_version[4];
+  const char *(*convert_irep)(mrb_state *mrb, struct mrb_irep *irep);
+};
+#ifdef MRB_CONVERTER_NIOS2
+extern struct mrb_machine machine_nios2;
+#endif
+
 struct mrb_parser_state* mrb_parser_new(mrb_state*);
 void mrb_parser_free(struct mrb_parser_state*);
 void mrb_parser_parse(struct mrb_parser_state*,mrbc_context*);
@@ -169,11 +181,6 @@ mrb_value mrb_load_file_cxt(mrb_state*,FILE*, mrbc_context *cxt);
 #endif
 mrb_value mrb_load_string_cxt(mrb_state *mrb, const char *s, mrbc_context *cxt);
 mrb_value mrb_load_nstring_cxt(mrb_state *mrb, const char *s, int len, mrbc_context *cxt);
-
-/* converter functions */
-#ifdef MRB_CONVERTER_NIOS2
-const char *mrb_convert_to_nios2(mrb_state *mrb, struct mrb_irep *irep);
-#endif
 
 #if defined(__cplusplus)
 }  /* extern "C" { */

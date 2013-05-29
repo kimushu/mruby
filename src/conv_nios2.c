@@ -22,6 +22,11 @@
 #define STACK_REG         21  /* r21 (Callee-saved) */
 #define MRBVM_REG         20  /* r20 (Callee-saved) */
 
+#define NIOS2_BINARY_IDENTIFIER "NIOS"
+#define NIOS2_BINARY_FORMAT_VER "2N01"
+#define NIOS2_COMPILER_NAME     "KIMS"
+#define NIOS2_COMPILER_VERSION  "0000"
+
 typedef struct scope
 {
   mrb_state *mrb;
@@ -36,7 +41,16 @@ typedef struct scope
 } convert_scope;
 
 static mrb_code *allocseq(convert_scope *s, size_t space);
-static const char *convert_irep(convert_scope *s);
+static const char *convert_iseq(convert_scope *s);
+static const char *convert_irep(mrb_state *mrb, mrb_irep *irep);
+
+struct mrb_machine machine_nios2 = {
+  NIOS2_BINARY_IDENTIFIER,
+  NIOS2_BINARY_FORMAT_VER,
+  NIOS2_COMPILER_NAME,
+  NIOS2_COMPILER_VERSION,
+  convert_irep,
+};
 
 static mrb_code *
 allocseq(convert_scope *s, size_t space)
@@ -51,7 +65,8 @@ allocseq(convert_scope *s, size_t space)
   return &s->new_iseq[pc];
 }
 
-static const char *convert_irep(convert_scope *s)
+static const char *
+convert_iseq(convert_scope *s)
 {
   mrb_code i, *p;
   uint32_t sbx, sign;
@@ -762,8 +777,8 @@ static const char *convert_irep(convert_scope *s)
   return NULL;
 }
 
-const char *
-mrb_convert_to_nios2(mrb_state *mrb, mrb_irep *irep)
+static const char *
+convert_irep(mrb_state *mrb, mrb_irep *irep)
 {
   convert_scope scope;
   const char *errmsg;
@@ -778,7 +793,7 @@ mrb_convert_to_nios2(mrb_state *mrb, mrb_irep *irep)
   scope.pc = 0;
   scope.icapa = 0;
 
-  errmsg = convert_irep(&scope);
+  errmsg = convert_iseq(&scope);
 
   if (errmsg == NULL) {
     mrb_free(mrb, irep->iseq);

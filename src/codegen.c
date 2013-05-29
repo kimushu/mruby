@@ -2407,11 +2407,11 @@ scope_finish(codegen_scope *s)
 
   irep->flags = 0;
   if (s->iseq) {
-    if (mrb->convert_machine) {
+    if (mrb->machine) {
       const char *errmsg;
       irep->iseq = s->iseq;
       irep->ilen = s->pc;
-      errmsg = (*mrb->convert_machine)(mrb, irep);
+      errmsg = (*mrb->machine->convert_irep)(mrb, irep);
       if (errmsg) codegen_error(s, errmsg);
     }
     else {
@@ -2876,11 +2876,11 @@ int
 mrb_set_machine(mrb_state *mrb, const char *name)
 {
   if (!name || strcmp(name, "rite") == 0) {
-    mrb->convert_machine = NULL;
+    mrb->machine = NULL;
   }
 #ifdef MRB_CONVERTER_NIOS2
   else if (strcmp(name, "nios2") == 0) {
-    mrb->convert_machine = mrb_convert_to_nios2;
+    mrb->machine = &machine_nios2;
   }
 #endif
   else {
