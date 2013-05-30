@@ -14,7 +14,7 @@ MRuby::Build.new do |conf|
   # include the default GEMs
   conf.gembox 'default'
 
-  conf.cc.flags << "-DMRB_CONVERTER_NIOS2"
+  conf.cc.defines << "MRB_CONVERTER_NIOS2"
   # C compiler settings
   # conf.cc do |cc|
   #   cc.command = ENV['CC'] || 'gcc'
@@ -87,3 +87,9 @@ end
 #   conf.test_runner.command = 'env'
 #
 # end
+
+MRuby::CrossBuild.new('nios2') do |conf|
+  toolchain :nios2
+  # conf.cc.defines << "MRB_MACHINE_NIOS2"
+  conf.cc.defines << "MRB_CONVERTER_NIOS2"
+end
