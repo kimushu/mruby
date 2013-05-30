@@ -40,7 +40,8 @@ typedef struct scope
   size_t icapa;
 } convert_scope;
 
-static mrb_code *allocseq(convert_scope *s, size_t space);
+static void allocseq(convert_scope *s, size_t space);
+static void genop(convert_scope *s, uint32_t c);
 static const char *convert_iseq(convert_scope *s);
 static const char *convert_irep(mrb_state *mrb, mrb_irep *irep);
 static void codedump(mrb_state *mrb, int n);
@@ -120,7 +121,7 @@ static const struct nios2_disasm_map disasm_mapx[] = {
   {NULL,    fmt_none},{NULL,    fmt_none},{NULL,    fmt_none},{NULL,    fmt_none},
 };
 
-static mrb_code *
+static void
 allocseq(convert_scope *s, size_t space)
 {
   size_t pc = s->pc;
@@ -128,9 +129,12 @@ allocseq(convert_scope *s, size_t space)
     s->icapa = pc + space + s->rite_ilen * ESTIMATE_RITE2NIOS;
     s->new_iseq = mrb_realloc(s->mrb, s->new_iseq, sizeof(mrb_code)*s->icapa);
   }
+}
 
-  s->pc += space;
-  return &s->new_iseq[pc];
+static void
+genop(convert_scope *s, uint32_t c)
+{
+  s->new_iseq[s->pc++] = c;
 }
 
 static const char *
@@ -151,69 +155,69 @@ convert_iseq(convert_scope *s)
     switch(GET_OPCODE(i)) {
     case OP_NOP:
       /*         no operation */
-      p = allocseq(s, 1);
-      p[0] = NIOS2_nop();
+      allocseq(s, 1);
+      genop(s, NIOS2_nop());
       break;
     case OP_MOVE:
       /* A B     R(A) := R(B) */
-      p = allocseq(s, 2);
-      p[0] = NIOS2_ldw(2, GETARG_B(i)*4, STACK_REG);
-      p[1] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 2);
+      genop(s, NIOS2_ldw(2, GETARG_B(i)*4, STACK_REG));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_LOADL:
       /* A Bx    R(A) := Lit(Bx) */
-      p = allocseq(s, 4);
-      p[0] = NIOS2_movui(4, GETARG_Bx(i));
-      p[1] = NIOS2_ldw(2, VMM(load_lit), MRBVM_REG);
-      p[2] = NIOS2_callr(2);
-      p[3] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 4);
+      genop(s, NIOS2_movui(4, GETARG_Bx(i)));
+      genop(s, NIOS2_ldw(2, VMM(load_lit), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_LOADI:
       /* A sBx   R(A) := sBx */
       sbx = GETARG_sBx(i);
-      sign = sbx>>(15-MRB_FIXNUM_SHIFT);
+      sign = (uint32_t)sbx>>(15-MRB_FIXNUM_SHIFT);
       if (sign == 0 || sign == ((1<<(16+1+MRB_FIXNUM_SHIFT))-1)) {
-        p = allocseq(s, 2);
-        p[0] = NIOS2_movi(2, (sbx<<MRB_FIXNUM_SHIFT)|MRB_FIXNUM_FLAG);
-        p[1] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+        allocseq(s, 2);
+        genop(s, NIOS2_movi(2, (sbx<<MRB_FIXNUM_SHIFT)|MRB_FIXNUM_FLAG));
+        genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       }
       else {
-        p = allocseq(s, 3);
-        p[0] = NIOS2_movhi(2, sbx>>(16-MRB_FIXNUM_SHIFT));
-        p[1] = NIOS2_ori(2, 2, (sbx<<MRB_FIXNUM_SHIFT)|MRB_FIXNUM_FLAG);
-        p[2] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+        allocseq(s, 3);
+        genop(s, NIOS2_movhi(2, sbx>>(16-MRB_FIXNUM_SHIFT)));
+        genop(s, NIOS2_ori(2, 2, (sbx<<MRB_FIXNUM_SHIFT)|MRB_FIXNUM_FLAG));
+        genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       }
       break;
     case OP_LOADSYM:
       /* A Bx    R(A) := Sym(Bx) */
-      p = allocseq(s, 4);
-      p[0] = NIOS2_movui(4, GETARG_Bx(i));
-      p[1] = NIOS2_ldw(2, VMM(load_sym), MRBVM_REG);
-      p[2] = NIOS2_callr(2);
-      p[3] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 4);
+      genop(s, NIOS2_movui(4, GETARG_Bx(i)));
+      genop(s, NIOS2_ldw(2, VMM(load_sym), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_LOADNIL:
       /* A       R(A) := nil */
-      p = allocseq(s, 1);
-      p[0] = NIOS2_stw(0, GETARG_A(i)*4, STACK_REG);  /* MRB_Qnil must be defined as zero */
+      allocseq(s, 1);
+      genop(s, NIOS2_stw(0, GETARG_A(i)*4, STACK_REG));  /* MRB_Qnil must be defined as zero */
       break;
     case OP_LOADSELF:
       /* A       R(A) := self */
-      p = allocseq(s, 2);
-      p[0] = NIOS2_ldw(2, 0*4, STACK_REG);
-      p[1] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 2);
+      genop(s, NIOS2_ldw(2, 0*4, STACK_REG));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_LOADT:
       /* A       R(A) := true */
-      p = allocseq(s, 2);
-      p[0] = NIOS2_movui(2, MRB_Qtrue);
-      p[1] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 2);
+      genop(s, NIOS2_movui(2, MRB_Qtrue));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_LOADF:
       /* A       R(A) := false */
-      p = allocseq(s, 2);
-      p[0] = NIOS2_movui(2, MRB_Qfalse);
-      p[1] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 2);
+      genop(s, NIOS2_movui(2, MRB_Qfalse));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_GETGLOBAL:
       /* A Bx    R(A) := getglobal(Sym(Bx)) */
@@ -223,28 +227,28 @@ convert_iseq(convert_scope *s)
       /* A Bx    R(A) := cvget(Sym(Bx)) */
     case OP_GETCONST:
       /* A Bx    R(A) := constget(Sym(Bx)) */
-      p = allocseq(s, 8);
-      p[0] = NIOS2_movui(4, GETARG_Bx(i));
-      p[1] = NIOS2_ldw(2, VMM(load_sym), MRBVM_REG);
-      p[2] = NIOS2_callr(2);
+      allocseq(s, 8);
+      genop(s, NIOS2_movui(4, GETARG_Bx(i)));
+      genop(s, NIOS2_ldw(2, VMM(load_sym), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
       switch (GET_OPCODE(i)) {
       case OP_GETGLOBAL:
-        p[3] = NIOS2_ldw(4, VMM(gv), MRBVM_REG);
+        genop(s, NIOS2_ldw(4, VMM(gv), MRBVM_REG));
         break;
       case OP_GETIV:
-        p[3] = NIOS2_ldw(4, VMM(iv), MRBVM_REG);
+        genop(s, NIOS2_ldw(4, VMM(iv), MRBVM_REG));
         break;
       case OP_GETCV:
-        p[3] = NIOS2_ldw(4, VMM(cv), MRBVM_REG);
+        genop(s, NIOS2_ldw(4, VMM(cv), MRBVM_REG));
         break;
       case OP_GETCONST:
-        p[3] = NIOS2_ldw(4, VMM(cnst), MRBVM_REG);
+        genop(s, NIOS2_ldw(4, VMM(cnst), MRBVM_REG));
         break;
       }
-      p[4] = NIOS2_mov(5, 2);
-      p[5] = NIOS2_ldw(2, VMM(hash_fetch), MRBVM_REG);
-      p[6] = NIOS2_callr(2);
-      p[7] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      genop(s, NIOS2_mov(5, 2));
+      genop(s, NIOS2_ldw(2, VMM(hash_fetch), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_SETGLOBAL:
       /* A Bx    setglobal(Sym(Bx),R(A)) */
@@ -254,264 +258,258 @@ convert_iseq(convert_scope *s)
       /* A Bx    cvset(Sym(Bx),R(A)) */
     case OP_SETCONST:
       /* A Bx    constset(Sym(Bx),R(A)) */
-      p = allocseq(s, 8);
-      p[0] = NIOS2_movui(4, GETARG_Bx(i));
-      p[1] = NIOS2_ldw(2, VMM(load_sym), MRBVM_REG);
-      p[2] = NIOS2_callr(2);
+      allocseq(s, 8);
+      genop(s, NIOS2_movui(4, GETARG_Bx(i)));
+      genop(s, NIOS2_ldw(2, VMM(load_sym), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
       switch (GET_OPCODE(i)) {
       case OP_GETGLOBAL:
-        p[3] = NIOS2_ldw(4, VMM(gv), MRBVM_REG);
+        genop(s, NIOS2_ldw(4, VMM(gv), MRBVM_REG));
         break;
       case OP_GETIV:
-        p[3] = NIOS2_ldw(4, VMM(iv), MRBVM_REG);
+        genop(s, NIOS2_ldw(4, VMM(iv), MRBVM_REG));
         break;
       case OP_GETCV:
-        p[3] = NIOS2_ldw(4, VMM(cv), MRBVM_REG);
+        genop(s, NIOS2_ldw(4, VMM(cv), MRBVM_REG));
         break;
       case OP_GETCONST:
-        p[3] = NIOS2_ldw(4, VMM(cnst), MRBVM_REG);
+        genop(s, NIOS2_ldw(4, VMM(cnst), MRBVM_REG));
         break;
       }
-      p[4] = NIOS2_mov(5, 2);
-      p[5] = NIOS2_ldw(6, GETARG_A(i)*4, STACK_REG);
-      p[6] = NIOS2_ldw(2, VMM(hash_store), MRBVM_REG);
-      p[7] = NIOS2_callr(2);
+      genop(s, NIOS2_mov(5, 2));
+      genop(s, NIOS2_ldw(6, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_ldw(2, VMM(hash_store), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
       break;
     /* case OP_GETSPECIAL: */
     /* case OP_SETSPECIAL: */
     case OP_GETMCNST:
       /* A Bx    R(A) := R(A)::Sym(B) */
-      p = allocseq(s, 8);
-      p[0] = NIOS2_movui(4, GETARG_Bx(i));
-      p[1] = NIOS2_ldw(2, VMM(load_sym), MRBVM_REG);
-      p[2] = NIOS2_callr(2);
-      p[3] = NIOS2_ldw(4, GETARG_A(i)*4, STACK_REG);
-      p[4] = NIOS2_mov(5, 2);
-      p[5] = NIOS2_ldw(2, VMM(getmcnst), MRBVM_REG);
-      p[6] = NIOS2_callr(2);
-      p[7] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 8);
+      genop(s, NIOS2_movui(4, GETARG_Bx(i)));
+      genop(s, NIOS2_ldw(2, VMM(load_sym), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_ldw(4, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_mov(5, 2));
+      genop(s, NIOS2_ldw(2, VMM(getmcnst), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_SETMCNST:
       /* A Bx    R(A+1)::Sym(B) := R(A) */
-      p = allocseq(s, 8);
-      p[0] = NIOS2_movui(4, GETARG_Bx(i));
-      p[1] = NIOS2_ldw(2, VMM(load_sym), MRBVM_REG);
-      p[2] = NIOS2_callr(2);
-      p[3] = NIOS2_ldw(4, (GETARG_A(i)+1)*4, STACK_REG);
-      p[4] = NIOS2_mov(5, 2);
-      p[5] = NIOS2_ldw(6, GETARG_A(i)*4, STACK_REG);
-      p[6] = NIOS2_ldw(2, VMM(setmcnst), MRBVM_REG);
-      p[7] = NIOS2_callr(2);
+      allocseq(s, 8);
+      genop(s, NIOS2_movui(4, GETARG_Bx(i)));
+      genop(s, NIOS2_ldw(2, VMM(load_sym), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_ldw(4, (GETARG_A(i)+1)*4, STACK_REG));
+      genop(s, NIOS2_mov(5, 2));
+      genop(s, NIOS2_ldw(6, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_ldw(2, VMM(setmcnst), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
       break;
     case OP_GETUPVAR:
       /* A B C   R(A) := uvget(B,C) */
-      p = allocseq(s, 5);
-      p[0] = NIOS2_ldw(2, VMM(getupvar), MRBVM_REG);
-      p[1] = NIOS2_movui(4, GETARG_B(i));
-      p[2] = NIOS2_movui(5, GETARG_C(i));
-      p[3] = NIOS2_callr(2);
-      p[4] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 5);
+      genop(s, NIOS2_ldw(2, VMM(getupvar), MRBVM_REG));
+      genop(s, NIOS2_movui(4, GETARG_B(i)));
+      genop(s, NIOS2_movui(5, GETARG_C(i)));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_SETUPVAR:
       /* A B C   uvset(B,C,R(A)) */
-      p = allocseq(s, 5);
-      p[0] = NIOS2_ldw(2, VMM(setupvar), MRBVM_REG);
-      p[1] = NIOS2_movui(4, GETARG_B(i));
-      p[2] = NIOS2_movui(5, GETARG_C(i));
-      p[3] = NIOS2_stw(6, GETARG_A(i)*4, STACK_REG);
-      p[4] = NIOS2_callr(2);
+      allocseq(s, 5);
+      genop(s, NIOS2_ldw(2, VMM(setupvar), MRBVM_REG));
+      genop(s, NIOS2_movui(4, GETARG_B(i)));
+      genop(s, NIOS2_movui(5, GETARG_C(i)));
+      genop(s, NIOS2_stw(6, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_callr(2));
       break;
     case OP_JMP:
       /* sBx     pc+=sBx */
-      p = allocseq(s, 1);
-      p[0] = NIOS2_br(GETARG_sBx(i)); /* placeholder */
+      allocseq(s, 1);
+      genop(s, NIOS2_br(GETARG_sBx(i))); /* placeholder */
       *s->rite_pc |= MKARG_Ax(0+1);
       break;
     case OP_JMPIF:
       /* A sBx   if R(A) pc+=sBx */
-      p = allocseq(s, 4);
-      p[0] = NIOS2_ldw(2, GETARG_A(i)*4, STACK_REG);
-      p[1] = NIOS2_rori(2, 2, MRB_FIXNUM_SHIFT);
-      p[2] = NIOS2_cmpleui(2, 2, MRB_Qfalse>>MRB_FIXNUM_SHIFT);
-      p[3] = NIOS2_beq(0, 2, GETARG_sBx(i)); /* placeholder */
+      allocseq(s, 4);
+      genop(s, NIOS2_ldw(2, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_rori(2, 2, MRB_FIXNUM_SHIFT));
+      genop(s, NIOS2_cmpleui(2, 2, MRB_Qfalse>>MRB_FIXNUM_SHIFT));
+      genop(s, NIOS2_beq(0, 2, GETARG_sBx(i))); /* placeholder */
       *s->rite_pc |= MKARG_Ax(3+1);
       break;
     case OP_JMPNOT:
       /* A sBx   if !R(A) pc+=sBx */
-      p = allocseq(s, 4);
-      p[0] = NIOS2_ldw(2, GETARG_A(i)*4, STACK_REG);
-      p[1] = NIOS2_rori(2, 2, MRB_FIXNUM_SHIFT);
-      p[2] = NIOS2_cmpleui(2, 2, MRB_Qfalse>>MRB_FIXNUM_SHIFT);
-      p[3] = NIOS2_bne(0, 2, GETARG_sBx(i)); /* placeholder */
+      allocseq(s, 4);
+      genop(s, NIOS2_ldw(2, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_rori(2, 2, MRB_FIXNUM_SHIFT));
+      genop(s, NIOS2_cmpleui(2, 2, MRB_Qfalse>>MRB_FIXNUM_SHIFT));
+      genop(s, NIOS2_bne(0, 2, GETARG_sBx(i))); /* placeholder */
       *s->rite_pc |= MKARG_Ax(3+1);
       break;
     case OP_ONERR:
       /* sBx     rescue_push(pc+sBx) */
-      p = allocseq(s, 4);
-      p[0] = NIOS2_nextpc(4);
-      p[1] = NIOS2_ldw(2, VMM(rescue_push), MRBVM_REG);
-      p[2] = NIOS2_movi(5, GETARG_sBx(i));  /* placeholder */
-      p[3] = NIOS2_callr(2);
+      allocseq(s, 4);
+      genop(s, NIOS2_nextpc(4));
+      genop(s, NIOS2_ldw(2, VMM(rescue_push), MRBVM_REG));
+      genop(s, NIOS2_movi(5, GETARG_sBx(i)));  /* placeholder */
+      genop(s, NIOS2_callr(2));
       *s->rite_pc |= MKARG_Ax(2+1);
       break;
     case OP_RESCUE:
       /* A       clear(exc); R(A) := exception (ignore when A=0) */
-      if (GETARG_A(i) == 0) {
-        p = allocseq(s, 2);
-        p[0] = NIOS2_ldw(2, VMM(rescue), MRBVM_REG);
-        p[1] = NIOS2_callr(2);
-      }
-      else {
-        p = allocseq(s, 3);
-        p[0] = NIOS2_ldw(2, VMM(rescue), MRBVM_REG);
-        p[1] = NIOS2_callr(2);
-        p[2] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 3);
+      allocseq(s, 2);
+      genop(s, NIOS2_ldw(2, VMM(rescue), MRBVM_REG));
+      if (GETARG_A(i) != 0) {
+        genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       }
       break;
     case OP_POPERR:
       /* A       A.times{rescue_pop()} */
-      p = allocseq(s, 3);
-      p[0] = NIOS2_movui(4, GETARG_A(i));
-      p[1] = NIOS2_ldw(2, VMM(rescue_pop), MRBVM_REG);
-      p[2] = NIOS2_callr(2);
+      allocseq(s, 3);
+      genop(s, NIOS2_movui(4, GETARG_A(i)));
+      genop(s, NIOS2_ldw(2, VMM(rescue_pop), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
       break;
     case OP_RAISE:
       /* A       raise(R(A)) */
-      p = allocseq(s, 3);
-      p[0] = NIOS2_ldw(4, GETARG_A(i)*4, STACK_REG);
-      p[1] = NIOS2_ldw(2, VMM(raise), MRBVM_REG);
-      p[2] = NIOS2_callr(2);
+      allocseq(s, 3);
+      genop(s, NIOS2_ldw(4, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_ldw(2, VMM(raise), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
       break;
     case OP_EPUSH:
       /* Bx      ensure_push(SEQ[Bx]) */
-      p = allocseq(s, 3);
-      p[0] = NIOS2_movui(4, GETARG_Bx(i));
-      p[1] = NIOS2_ldw(2, VMM(ensure_push), MRBVM_REG);
-      p[2] = NIOS2_callr(2);
+      allocseq(s, 3);
+      genop(s, NIOS2_movui(4, GETARG_Bx(i)));
+      genop(s, NIOS2_ldw(2, VMM(ensure_push), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
       break;
     case OP_EPOP:
       /* A       A.times{ensure_pop().call} */
-      p = allocseq(s, 3);
-      p[0] = NIOS2_movui(4, GETARG_A(i));
-      p[1] = NIOS2_ldw(2, VMM(ensure_pop), MRBVM_REG);
-      p[2] = NIOS2_callr(2);
+      allocseq(s, 3);
+      genop(s, NIOS2_movui(4, GETARG_A(i)));
+      genop(s, NIOS2_ldw(2, VMM(ensure_pop), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
       break;
     case OP_SEND:
     L_OP_SEND:
       /* A B C   R(A) := call(R(A),mSym(B),R(A+1),...,R(A+C),&R(A+C+1)) */
-      p = allocseq(s, 1);
+      allocseq(s, 1);
       if (GETARG_C(i) == CALL_MAXARGS) {
-        p[0] = NIOS2_stw(0, (GETARG_A(i)+2)*4, STACK_REG);
+        genop(s, NIOS2_stw(0, (GETARG_A(i)+2)*4, STACK_REG));
       }
       else {
-        p[0] = NIOS2_stw(0, (GETARG_A(i)+GETARG_C(i)+1)*4, STACK_REG);
+        genop(s, NIOS2_stw(0, (GETARG_A(i)+GETARG_C(i)+1)*4, STACK_REG));
       }
       /* fall through */
     case OP_SENDB:
       /* A B C   R(A) := call(R(A),mSym(B),R(A+1),...,R(A+C)) */
-      p = allocseq(s, (GETARG_C(i) < CALL_MAXARGS) ? 8 : 7);
-      p[0] = NIOS2_movui(4, GETARG_B(i));
-      p[1] = NIOS2_ldw(2, VMM(load_sym), MRBVM_REG);
-      p[2] = NIOS2_callr(2);
-      p[3] = NIOS2_addi(4, STACK_REG, GETARG_A(i)*4);
-      p[4] = NIOS2_mov(5, 2);
+      allocseq(s, 8);
+      genop(s, NIOS2_movui(4, GETARG_B(i)));
+      genop(s, NIOS2_ldw(2, VMM(load_sym), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_addi(4, STACK_REG, GETARG_A(i)*4));
+      genop(s, NIOS2_mov(5, 2));
       if (GETARG_C(i) < CALL_MAXARGS) {
-        p[5] = NIOS2_movui(6, GETARG_C(i));
-        p[6] = NIOS2_ldw(2, VMM(send_normal), MRBVM_REG);
-        p[7] = NIOS2_callr(2);
+        genop(s, NIOS2_movui(6, GETARG_C(i)));
+        genop(s, NIOS2_ldw(2, VMM(send_normal), MRBVM_REG));
       }
       else {
-        p[5] = NIOS2_ldw(2, VMM(send_array), MRBVM_REG);
-        p[6] = NIOS2_callr(2);
+        genop(s, NIOS2_ldw(2, VMM(send_array), MRBVM_REG));
       }
+      genop(s, NIOS2_callr(2));
       break;
     /* case OP_FSEND: */
     case OP_CALL:
       /* A       R(A) := self.call(frame.argc, frame.argv) */
-      p = allocseq(s, 2);
-      p[0] = NIOS2_ldw(2, VMM(call), MRBVM_REG);
-      p[1] = NIOS2_callr(2);
+      allocseq(s, 2);
+      genop(s, NIOS2_ldw(2, VMM(call), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
       break;
     case OP_SUPER:
       /* A B C   R(A) := super(R(A+1),... ,R(A+C-1)) */
-      p = allocseq(s, 5);
-      p[0] = NIOS2_ldw(2, VMM(super), MRBVM_REG);
-      p[1] = NIOS2_addi(4, STACK_REG, (GETARG_A(i)+1)*4);
-      p[2] = NIOS2_movui(5, GETARG_C(i));
-      p[3] = NIOS2_callr(2);
-      p[4] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 5);
+      genop(s, NIOS2_ldw(2, VMM(super), MRBVM_REG));
+      genop(s, NIOS2_addi(4, STACK_REG, (GETARG_A(i)+1)*4));
+      genop(s, NIOS2_movui(5, GETARG_C(i)));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_ARGARY:
       /* A Bx   R(A) := argument array (16=6:1:5:4) */
-      p = allocseq(s, 4);
-      p[0] = NIOS2_ldw(2, VMM(argary), MRBVM_REG);
-      p[1] = NIOS2_movui(4, GETARG_Bx(i));
-      p[2] = NIOS2_callr(2);
-      p[3] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 4);
+      genop(s, NIOS2_ldw(2, VMM(argary), MRBVM_REG));
+      genop(s, NIOS2_movui(4, GETARG_Bx(i)));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_ENTER:
       /* Ax      arg setup according to flags (24=5:5:1:5:5:1:1) */
+      allocseq(s, 4);
+      genop(s, NIOS2_ldw(2, VMM(enter), MRBVM_REG));
       if (GETARG_Ax(i) > 0xffff) {
-        p = allocseq(s, 4);
-        p[0] = NIOS2_ldw(2, VMM(enter), MRBVM_REG);
-        p[1] = NIOS2_movhi(4, GETARG_Ax(i)>>16);
-        p[2] = NIOS2_ori(4, 4, GETARG_Ax(i)&0xffff);
-        p[3] = NIOS2_callr(2);
+        genop(s, NIOS2_movhi(4, GETARG_Ax(i)>>16));
+        if ((GETARG_Ax(i)&0xffff) > 0) {
+          genop(s, NIOS2_ori(4, 4, GETARG_Ax(i)&0xffff));
+        }
       }
       else {
-        p = allocseq(s, 3);
-        p[0] = NIOS2_ldw(2, VMM(enter), MRBVM_REG);
-        p[1] = NIOS2_movui(4, GETARG_Ax(i));
-        p[2] = NIOS2_callr(2);
+        allocseq(s, 3);
+        genop(s, NIOS2_movui(4, GETARG_Ax(i)));
       }
+      genop(s, NIOS2_callr(2));
       break;
     /* case OP_KARG: */
     /* case OP_KDICT: */
     case OP_RETURN:
-      p = allocseq(s, 3);
+      allocseq(s, 3);
       /* A B     return R(A) (B=normal,in-block return/break) */
       switch (GETARG_B(i)) {
       case OP_R_NORMAL:
-        p[0] = NIOS2_ldw(2, VMM(ret_normal), MRBVM_REG);
+        genop(s, NIOS2_ldw(2, VMM(ret_normal), MRBVM_REG));
         break;
       case OP_R_BREAK:
-        p[0] = NIOS2_ldw(2, VMM(ret_break), MRBVM_REG);
+        genop(s, NIOS2_ldw(2, VMM(ret_break), MRBVM_REG));
         break;
       case OP_R_RETURN:
-        p[0] = NIOS2_ldw(2, VMM(ret_return), MRBVM_REG);
+        genop(s, NIOS2_ldw(2, VMM(ret_return), MRBVM_REG));
         break;
       }
-      p[1] = NIOS2_ldw(4, GETARG_A(i)*4, STACK_REG);
-      p[2] = NIOS2_callr(2);
+      genop(s, NIOS2_ldw(4, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_callr(2));
       break;
     /* case OP_TAILCALL: */
     case OP_BLKPUSH:
       /* A Bx    R(A) := block (16=6:1:5:4) */
-      p = allocseq(s, 4);
-      p[0] = NIOS2_ldw(2, VMM(blk_push), MRBVM_REG);
-      p[1] = NIOS2_movui(4, GETARG_Bx(i));
-      p[2] = NIOS2_callr(2);
-      p[3] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 4);
+      genop(s, NIOS2_ldw(2, VMM(blk_push), MRBVM_REG));
+      genop(s, NIOS2_movui(4, GETARG_Bx(i)));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_ADD:
       /* A B C   R(A) := R(A)+R(A+1) (mSyms[B]=:+,C=1) */
-      p = allocseq(s, 13);
-      p[0]  = NIOS2_ldw(2, GETARG_A(i)*4, STACK_REG);
-      p[1]  = NIOS2_ldw(3, (GETARG_A(i)+1)*4, STACK_REG);
+      allocseq(s, 13);
+      genop(s, NIOS2_ldw(2, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_ldw(3, (GETARG_A(i)+1)*4, STACK_REG));
       /* Class check */
-      p[2]  = NIOS2_and(4, 2, 3);
-      p[3]  = NIOS2_andi(4, 4, MRB_FIXNUM_FLAG);
-      p[4]  = NIOS2_beq(0, 4, 8*4); /* To method call */
+      genop(s, NIOS2_and(4, 2, 3));
+      genop(s, NIOS2_andi(4, 4, MRB_FIXNUM_FLAG));
+      genop(s, NIOS2_beq(0, 4, 8*4)); /* To method call */
       /* Execute */
-      p[5]  = NIOS2_subi(3, 3, 1);
-      p[6]  = NIOS2_add(4, 2, 3);
+      genop(s, NIOS2_subi(3, 3, 1));
+      genop(s, NIOS2_add(4, 2, 3));
       /* Overflow check */
-      p[7]  = NIOS2_xor(5, 4, 2);
-      p[8]  = NIOS2_xor(6, 4, 3);
-      p[9]  = NIOS2_and(5, 5, 6);
-      p[10] = NIOS2_blt(5, 0, 2*4); /* To method call */
-      p[11] = NIOS2_stw(4, GETARG_A(i)*4, STACK_REG);
-      p[12] = NIOS2_br(9*4);
+      genop(s, NIOS2_xor(5, 4, 2));
+      genop(s, NIOS2_xor(6, 4, 3));
+      genop(s, NIOS2_and(5, 5, 6));
+      genop(s, NIOS2_blt(5, 0, 2*4)); /* To method call */
+      genop(s, NIOS2_stw(4, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_br(9*4));
       /* Method call */
       goto L_OP_SEND;
     case OP_ADDI:
@@ -519,45 +517,45 @@ convert_iseq(convert_scope *s)
       if (GETARG_C(i) == 0) {
         break;
       }
-      p = allocseq(s, 9);
-      p[0] = NIOS2_ldw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 9);
+      genop(s, NIOS2_ldw(2, GETARG_A(i)*4, STACK_REG));
       /* Class check */
-      p[1] = NIOS2_andi(3, 2, MRB_FIXNUM_FLAG);
-      p[2] = NIOS2_beq(0, 3, 4*4); /* To method call */
+      genop(s, NIOS2_andi(3, 2, MRB_FIXNUM_FLAG));
+      genop(s, NIOS2_beq(0, 3, 4*4)); /* To method call */
       /* Execute */
-      p[3] = NIOS2_addi(3, 2, GETARG_C(i)<<MRB_FIXNUM_SHIFT);
+      genop(s, NIOS2_addi(3, 2, GETARG_C(i)<<MRB_FIXNUM_SHIFT));
       /* Overflow check */
       if (GETARG_C(i) > 0) {
-        p[4] = NIOS2_blt(3, 2, 2*4);  /* To method call */
+        genop(s, NIOS2_blt(3, 2, 2*4));  /* To method call */
       }
       else {
-        p[4] = NIOS2_bgt(3, 2, 2*4);  /* To method call */
+        genop(s, NIOS2_bgt(3, 2, 2*4));  /* To method call */
       }
-      p[5] = NIOS2_stw(4, GETARG_A(i)*4, STACK_REG);
-      p[6] = NIOS2_br((9+2)*4);
+      genop(s, NIOS2_stw(4, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_br((9+2)*4));
       /* Method call */
-      p[7] = NIOS2_movi(2, (GETARG_C(i)<<MRB_FIXNUM_SHIFT)|MRB_FIXNUM_FLAG);
-      p[8] = NIOS2_stw(2, (GETARG_A(i)+1)*4, STACK_REG);
+      genop(s, NIOS2_movi(2, (GETARG_C(i)<<MRB_FIXNUM_SHIFT)|MRB_FIXNUM_FLAG));
+      genop(s, NIOS2_stw(2, (GETARG_A(i)+1)*4, STACK_REG));
       goto L_OP_SEND;
     case OP_SUB:
       /* A B C   R(A) := R(A)-R(A+1) (mSyms[B]=:-,C=1) */
-      p = allocseq(s, 13);
-      p[0]  = NIOS2_ldw(2, GETARG_A(i)*4, STACK_REG);
-      p[1]  = NIOS2_ldw(3, (GETARG_A(i)+1)*4, STACK_REG);
+      allocseq(s, 13);
+      genop(s, NIOS2_ldw(2, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_ldw(3, (GETARG_A(i)+1)*4, STACK_REG));
       /* Class check */
-      p[2]  = NIOS2_and(4, 2, 3);
-      p[3]  = NIOS2_andi(4, 4, MRB_FIXNUM_FLAG);
-      p[4]  = NIOS2_beq(0, 4, 8*4); /* To method call */
+      genop(s, NIOS2_and(4, 2, 3));
+      genop(s, NIOS2_andi(4, 4, MRB_FIXNUM_FLAG));
+      genop(s, NIOS2_beq(0, 4, 8*4)); /* To method call */
       /* Execute */
-      p[5]  = NIOS2_subi(3, 3, 1);
-      p[6]  = NIOS2_sub(4, 2, 3);
+      genop(s, NIOS2_subi(3, 3, 1));
+      genop(s, NIOS2_sub(4, 2, 3));
       /* Overflow check */
-      p[7]  = NIOS2_xor(5, 4, 2);
-      p[8]  = NIOS2_xor(6, 4, 3);
-      p[9]  = NIOS2_and(5, 5, 6);
-      p[10] = NIOS2_blt(5, 0, 2*4); /* To method call */
-      p[11] = NIOS2_stw(4, GETARG_A(i)*4, STACK_REG);
-      p[12] = NIOS2_br(9*4);
+      genop(s, NIOS2_xor(5, 4, 2));
+      genop(s, NIOS2_xor(6, 4, 3));
+      genop(s, NIOS2_and(5, 5, 6));
+      genop(s, NIOS2_blt(5, 0, 2*4)); /* To method call */
+      genop(s, NIOS2_stw(4, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_br(9*4));
       /* Method call */
       goto L_OP_SEND;
     case OP_SUBI:
@@ -565,25 +563,25 @@ convert_iseq(convert_scope *s)
       if (GETARG_C(i) == 0) {
         break;
       }
-      p = allocseq(s, 9);
-      p[0] = NIOS2_ldw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 9);
+      genop(s, NIOS2_ldw(2, GETARG_A(i)*4, STACK_REG));
       /* Class check */
-      p[1] = NIOS2_andi(3, 2, MRB_FIXNUM_FLAG);
-      p[2] = NIOS2_beq(0, 3, 4*4); /* To method call */
+      genop(s, NIOS2_andi(3, 2, MRB_FIXNUM_FLAG));
+      genop(s, NIOS2_beq(0, 3, 4*4)); /* To method call */
       /* Execute */
-      p[3] = NIOS2_subi(3, 2, GETARG_C(i)<<MRB_FIXNUM_SHIFT);
+      genop(s, NIOS2_subi(3, 2, GETARG_C(i)<<MRB_FIXNUM_SHIFT));
       /* Overflow check */
       if (GETARG_C(i) < 0) {
-        p[4] = NIOS2_blt(3, 2, 2*4);  /* To method call */
+        genop(s, NIOS2_blt(3, 2, 2*4));  /* To method call */
       }
       else {
-        p[4] = NIOS2_bgt(3, 2, 2*4);  /* To method call */
+        genop(s, NIOS2_bgt(3, 2, 2*4));  /* To method call */
       }
-      p[5] = NIOS2_stw(4, GETARG_A(i)*4, STACK_REG);
-      p[6] = NIOS2_br((9+2)*4);
+      genop(s, NIOS2_stw(4, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_br((9+2)*4));
       /* Method call */
-      p[7] = NIOS2_movi(2, (GETARG_C(i)<<MRB_FIXNUM_SHIFT)|MRB_FIXNUM_FLAG);
-      p[8] = NIOS2_stw(2, (GETARG_A(i)+1)*4, STACK_REG);
+      genop(s, NIOS2_movi(2, (GETARG_C(i)<<MRB_FIXNUM_SHIFT)|MRB_FIXNUM_FLAG));
+      genop(s, NIOS2_stw(2, (GETARG_A(i)+1)*4, STACK_REG));
       goto L_OP_SEND;
     case OP_MUL:
       goto L_OP_SEND;
@@ -591,19 +589,19 @@ convert_iseq(convert_scope *s)
       goto L_OP_SEND;
     case OP_EQ:
       /* A B C   R(A) := R(A)==R(A+1) (mSyms[B]=:==,C=1) */
-      p = allocseq(s, 11);
-      p[0]  = NIOS2_ldw(2, GETARG_A(i)*4, STACK_REG);
-      p[1]  = NIOS2_ldw(3, (GETARG_A(i)+1)*4, STACK_REG);
-      p[2]  = NIOS2_or(4, 2, 3);
-      p[3]  = NIOS2_beq(4, 0, 4*4); /* NilClass vs. NilClass => true */
-      p[4]  = NIOS2_cmpltui(4, 4, 1<<MRB_SPECIAL_SHIFT);
-      p[5]  = NIOS2_beq(4, 0, 5*4); /* To method call */
+      allocseq(s, 11);
+      genop(s, NIOS2_ldw(2, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_ldw(3, (GETARG_A(i)+1)*4, STACK_REG));
+      genop(s, NIOS2_or(4, 2, 3));
+      genop(s, NIOS2_beq(4, 0, 4*4)); /* NilClass vs. NilClass => true */
+      genop(s, NIOS2_cmpltui(4, 4, 1<<MRB_SPECIAL_SHIFT));
+      genop(s, NIOS2_beq(4, 0, 5*4)); /* To method call */
       /* Qxxx/Fixnum vs. Qxxx/Fixnum */
-      p[6]  = NIOS2_movui(4, MRB_Qfalse);
-      p[7]  = NIOS2_bne(2, 3, 1*4);
-      p[8]  = NIOS2_movui(4, MRB_Qtrue);
-      p[9]  = NIOS2_stw(4, GETARG_A(i)*4, STACK_REG);
-      p[10] = NIOS2_br(9*4);
+      genop(s, NIOS2_movui(4, MRB_Qfalse));
+      genop(s, NIOS2_bne(2, 3, 1*4));
+      genop(s, NIOS2_movui(4, MRB_Qtrue));
+      genop(s, NIOS2_stw(4, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_br(9*4));
       /* Method call */
       goto L_OP_SEND;
     case OP_LT:
@@ -614,204 +612,204 @@ convert_iseq(convert_scope *s)
       /* A B C   R(A) := R(A)>R(A+1)  (mSyms[B]=:>,C=1) */
     case OP_GE:
       /* A B C   R(A) := R(A)>=R(A+1)  (mSyms[B]=:>=,C=1) */
-      p = allocseq(s, 10);
-      p[0] = NIOS2_ldw(2, GETARG_A(i)*4, STACK_REG);
-      p[1] = NIOS2_ldw(3, (GETARG_A(i)+1)*4, STACK_REG);
-      p[2] = NIOS2_and(4, 2, 3);
-      p[3] = NIOS2_andi(4, 4, MRB_FIXNUM_FLAG);
-      p[4] = NIOS2_beq(4, 0, 5*4);
+      allocseq(s, 10);
+      genop(s, NIOS2_ldw(2, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_ldw(3, (GETARG_A(i)+1)*4, STACK_REG));
+      genop(s, NIOS2_and(4, 2, 3));
+      genop(s, NIOS2_andi(4, 4, MRB_FIXNUM_FLAG));
+      genop(s, NIOS2_beq(4, 0, 5*4));
       /* Fixnum vs. Fixnum */
-      p[5] = NIOS2_movui(4, MRB_Qfalse);
+      genop(s, NIOS2_movui(4, MRB_Qfalse));
       switch (GET_OPCODE(i)) {
       case OP_LT:
-        p[6] = NIOS2_bge(2, 3, 1*4);
+        genop(s, NIOS2_bge(2, 3, 1*4));
         break;
       case OP_LE:
-        p[6] = NIOS2_bgt(2, 3, 1*4);
+        genop(s, NIOS2_bgt(2, 3, 1*4));
         break;
       case OP_GT:
-        p[6] = NIOS2_ble(2, 3, 1*4);
+        genop(s, NIOS2_ble(2, 3, 1*4));
         break;
       case OP_GE:
-        p[6] = NIOS2_blt(2, 3, 1*4);
+        genop(s, NIOS2_blt(2, 3, 1*4));
         break;
       }
-      p[7] = NIOS2_movui(4, MRB_Qtrue);
-      p[8] = NIOS2_stw(4, GETARG_A(i)*4, STACK_REG);
-      p[9] = NIOS2_br(9*4);
+      genop(s, NIOS2_movui(4, MRB_Qtrue));
+      genop(s, NIOS2_stw(4, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_br(9*4));
       /* Method call */
       goto L_OP_SEND;
     case OP_ARRAY:
       /* A B C   R(A) := ary_new(R(B),R(B+1)..R(B+C)) */
-      p = allocseq(s, 5);
-      p[0] = NIOS2_addi(4, STACK_REG, GETARG_B(i)*4);
-      p[1] = NIOS2_movui(5, GETARG_C(i));
-      p[2] = NIOS2_ldw(2, VMM(ary_new), MRBVM_REG);
-      p[3] = NIOS2_callr(2);
-      p[4] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 5);
+      genop(s, NIOS2_addi(4, STACK_REG, GETARG_B(i)*4));
+      genop(s, NIOS2_movui(5, GETARG_C(i)));
+      genop(s, NIOS2_ldw(2, VMM(ary_new), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_ARYPUSH:
       /* A B     ary_push(R(A),R(B)) */
-      p = allocseq(s, 4);
-      p[0] = NIOS2_ldw(4, GETARG_A(i)*4, STACK_REG);
-      p[1] = NIOS2_ldw(5, GETARG_B(i)*4, STACK_REG);
-      p[2] = NIOS2_ldw(2, VMM(ary_push), MRBVM_REG);
-      p[3] = NIOS2_callr(2);
+      allocseq(s, 4);
+      genop(s, NIOS2_ldw(4, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_ldw(5, GETARG_B(i)*4, STACK_REG));
+      genop(s, NIOS2_ldw(2, VMM(ary_push), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
       break;
     case OP_AREF:
       /* A B C   R(A) := R(B)[C] */
-      p = allocseq(s, 5);
-      p[0] = NIOS2_ldw(4, GETARG_B(i)*4, STACK_REG);
-      p[1] = NIOS2_movui(5, GETARG_C(i));
-      p[2] = NIOS2_ldw(2, VMM(ary_fetch), MRBVM_REG);
-      p[3] = NIOS2_callr(2);
-      p[4] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 5);
+      genop(s, NIOS2_ldw(4, GETARG_B(i)*4, STACK_REG));
+      genop(s, NIOS2_movui(5, GETARG_C(i)));
+      genop(s, NIOS2_ldw(2, VMM(ary_fetch), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_ASET:
       /* A B C   R(B)[C] := R(A) */
-      p = allocseq(s, 5);
-      p[0] = NIOS2_addi(4, STACK_REG, GETARG_B(i)*4);
-      p[1] = NIOS2_movui(5, GETARG_C(i));
-      p[2] = NIOS2_ldw(6, GETARG_A(i)*4, STACK_REG);
-      p[3] = NIOS2_ldw(2, VMM(ary_store), MRBVM_REG);
-      p[4] = NIOS2_callr(2);
+      allocseq(s, 5);
+      genop(s, NIOS2_addi(4, STACK_REG, GETARG_B(i)*4));
+      genop(s, NIOS2_movui(5, GETARG_C(i)));
+      genop(s, NIOS2_ldw(6, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_ldw(2, VMM(ary_store), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
       break;
     case OP_APOST:
       /* A B C   *R(A),R(A+1)..R(A+C) := R(A)[B..-1] */
-      p = allocseq(s, 5);
-      p[0] = NIOS2_addi(4, STACK_REG, GETARG_A(i)*4);
-      p[1] = NIOS2_movui(5, GETARG_B(i));
-      p[2] = NIOS2_movui(6, GETARG_C(i));
-      p[3] = NIOS2_ldw(2, VMM(ary_post), MRBVM_REG);
-      p[4] = NIOS2_callr(2);
+      allocseq(s, 5);
+      genop(s, NIOS2_addi(4, STACK_REG, GETARG_A(i)*4));
+      genop(s, NIOS2_movui(5, GETARG_B(i)));
+      genop(s, NIOS2_movui(6, GETARG_C(i)));
+      genop(s, NIOS2_ldw(2, VMM(ary_post), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
       break;
     case OP_STRING:
       /* A Bx    R(A) := str_dup(Lit(Bx)) */
-      p = allocseq(s, 4);
-      p[0] = NIOS2_movui(4, GETARG_Bx(i));
-      p[1] = NIOS2_ldw(2, VMM(str_dup), MRBVM_REG);
-      p[2] = NIOS2_callr(2);
-      p[3] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 4);
+      genop(s, NIOS2_movui(4, GETARG_Bx(i)));
+      genop(s, NIOS2_ldw(2, VMM(str_dup), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_STRCAT:
       /* A B     str_cat(R(A),R(B)) */
-      p = allocseq(s, 4);
-      p[0] = NIOS2_ldw(4, GETARG_A(i)*4, STACK_REG);
-      p[1] = NIOS2_ldw(5, GETARG_B(i)*4, STACK_REG);
-      p[2] = NIOS2_ldw(2, VMM(str_cat), MRBVM_REG);
-      p[3] = NIOS2_callr(2);
+      allocseq(s, 4);
+      genop(s, NIOS2_ldw(4, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_ldw(5, GETARG_B(i)*4, STACK_REG));
+      genop(s, NIOS2_ldw(2, VMM(str_cat), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
       break;
     case OP_HASH:
       /* A B C   R(A) := hash_new(R(B),R(B+1)..R(B+2*C-1)) */
-      p = allocseq(s, 5);
-      p[0] = NIOS2_addi(4, GETARG_B(i)*4, STACK_REG);
-      p[1] = NIOS2_movui(5, GETARG_C(i));
-      p[2] = NIOS2_ldw(2, VMM(hash_new), MRBVM_REG);
-      p[3] = NIOS2_callr(2);
-      p[4] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 5);
+      genop(s, NIOS2_addi(4, GETARG_B(i)*4, STACK_REG));
+      genop(s, NIOS2_movui(5, GETARG_C(i)));
+      genop(s, NIOS2_ldw(2, VMM(hash_new), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_LAMBDA:
       /* A Bz Cz R(A) := lambda(SEQ[Bz],Cm) */
-      p = allocseq(s, 5);
-      p[0] = NIOS2_movui(4, GETARG_b(i));
-      p[1] = NIOS2_movui(5, GETARG_c(i));
-      p[2] = NIOS2_ldw(2, VMM(lambda), MRBVM_REG);
-      p[3] = NIOS2_callr(2);
-      p[4] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 5);
+      genop(s, NIOS2_movui(4, GETARG_b(i)));
+      genop(s, NIOS2_movui(5, GETARG_c(i)));
+      genop(s, NIOS2_ldw(2, VMM(lambda), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_RANGE:
       /* A B C   R(A) := range_new(R(B),R(B+1),C) (C=0:'..', C=1:'...') */
-      p = allocseq(s, 6);
-      p[0] = NIOS2_addi(4, GETARG_B(i)*4, STACK_REG);
-      p[1] = NIOS2_addi(5, (GETARG_B(i)+1)*4, STACK_REG);
-      p[2] = NIOS2_movui(6, GETARG_C(i));
-      p[3] = NIOS2_ldw(2, VMM(range_new), MRBVM_REG);
-      p[4] = NIOS2_callr(2);
-      p[5] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 6);
+      genop(s, NIOS2_addi(4, GETARG_B(i)*4, STACK_REG));
+      genop(s, NIOS2_addi(5, (GETARG_B(i)+1)*4, STACK_REG));
+      genop(s, NIOS2_movui(6, GETARG_C(i)));
+      genop(s, NIOS2_ldw(2, VMM(range_new), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_OCLASS:
       /* A       R(A) := ::Object */
-      p = allocseq(s, 2);
-      p[0] = NIOS2_ldw(2, VMM(object_class), MRBVM_REG);
-      p[1] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 2);
+      genop(s, NIOS2_ldw(2, VMM(object_class), MRBVM_REG));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_CLASS:
       /* A B     R(A) := newclass(R(A),mSym(B),R(A+1)) */
-      p = allocseq(s, 6);
-      p[0] = NIOS2_ldw(4, GETARG_A(i)*4, STACK_REG);
-      p[1] = NIOS2_movui(5, GETARG_B(i));
-      p[2] = NIOS2_ldw(6, (GETARG_A(i)+1)*4, STACK_REG);
-      p[3] = NIOS2_ldw(2, VMM(newclass), MRBVM_REG);
-      p[4] = NIOS2_callr(2);
-      p[5] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 6);
+      genop(s, NIOS2_ldw(4, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_movui(5, GETARG_B(i)));
+      genop(s, NIOS2_ldw(6, (GETARG_A(i)+1)*4, STACK_REG));
+      genop(s, NIOS2_ldw(2, VMM(newclass), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_MODULE:
       /* A B     R(A) := newmodule(R(A),mSym(B)) */
-      p = allocseq(s, 5);
-      p[0] = NIOS2_ldw(4, GETARG_A(i)*4, STACK_REG);
-      p[1] = NIOS2_movui(5, GETARG_B(i));
-      p[2] = NIOS2_ldw(2, VMM(newmodule), MRBVM_REG);
-      p[3] = NIOS2_callr(2);
-      p[4] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 5);
+      genop(s, NIOS2_ldw(4, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_movui(5, GETARG_B(i)));
+      genop(s, NIOS2_ldw(2, VMM(newmodule), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_EXEC:
       /* A Bx    R(A) := blockexec(R(A),SEQ[Bx]) */
-      p = allocseq(s, 5);
-      p[0] = NIOS2_ldw(2, VMM(blockexec), MRBVM_REG);
-      p[1] = NIOS2_ldw(4, GETARG_A(i)*4, STACK_REG);
-      p[2] = NIOS2_movui(5, GETARG_Bx(i));
-      p[3] = NIOS2_callr(2);
-      p[4] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 5);
+      genop(s, NIOS2_ldw(2, VMM(blockexec), MRBVM_REG));
+      genop(s, NIOS2_ldw(4, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_movui(5, GETARG_Bx(i)));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_METHOD:
       /* A B     R(A).newmethod(mSym(B),R(A+1)) */
-      p = allocseq(s, 8);
-      p[0] = NIOS2_movui(4, GETARG_B(i));
-      p[1] = NIOS2_ldw(2, VMM(load_sym), MRBVM_REG);
-      p[2] = NIOS2_callr(2);
-      p[3] = NIOS2_ldw(4, GETARG_A(i)*4, STACK_REG);
-      p[4] = NIOS2_mov(5, 2);
-      p[5] = NIOS2_ldw(6, (GETARG_A(i)+1)*4, STACK_REG);
-      p[6] = NIOS2_ldw(2, VMM(newmethod), MRBVM_REG);
-      p[7] = NIOS2_callr(2);
+      allocseq(s, 8);
+      genop(s, NIOS2_movui(4, GETARG_B(i)));
+      genop(s, NIOS2_ldw(2, VMM(load_sym), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_ldw(4, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_mov(5, 2));
+      genop(s, NIOS2_ldw(6, (GETARG_A(i)+1)*4, STACK_REG));
+      genop(s, NIOS2_ldw(2, VMM(newmethod), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
       break;
     case OP_SCLASS:
       /* A B     R(A) := R(B).singleton_class */
-      p = allocseq(s, 4);
-      p[0] = NIOS2_ldw(4, GETARG_B(i)*4, STACK_REG);
-      p[1] = NIOS2_ldw(2, VMM(singleton_class), MRBVM_REG);
-      p[2] = NIOS2_callr(2);
-      p[3] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 4);
+      genop(s, NIOS2_ldw(4, GETARG_B(i)*4, STACK_REG));
+      genop(s, NIOS2_ldw(2, VMM(singleton_class), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_TCLASS:
       /* A       R(A) := target_class */
-      p = allocseq(s, 3);
-      p[0] = NIOS2_ldw(2, VMM(target_class), MRBVM_REG);
-      p[1] = NIOS2_callr(2);
-      p[2] = NIOS2_stw(2, GETARG_A(i)*4, STACK_REG);
+      allocseq(s, 3);
+      genop(s, NIOS2_ldw(2, VMM(target_class), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_stw(2, GETARG_A(i)*4, STACK_REG));
       break;
     case OP_DEBUG:
       /* A       print R(A) */
-      p = allocseq(s, 3);
-      p[0] = NIOS2_ldw(4, GETARG_A(i)*4, STACK_REG);
-      p[1] = NIOS2_ldw(2, VMM(raise), MRBVM_REG);
-      p[2] = NIOS2_callr(2);
+      allocseq(s, 3);
+      genop(s, NIOS2_ldw(4, GETARG_A(i)*4, STACK_REG));
+      genop(s, NIOS2_ldw(2, VMM(raise), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
       break;
     case OP_STOP:
       /*         stop VM */
-      p = allocseq(s, 2);
-      p[0] = NIOS2_ldw(2, VMM(stop_vm), MRBVM_REG);
-      p[1] = NIOS2_callr(2);
+      allocseq(s, 2);
+      genop(s, NIOS2_ldw(2, VMM(stop_vm), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
       break;
     case OP_ERR:
       /* Bx      raise RuntimeError with message Lit(Bx) */
-      p = allocseq(s, 6);
-      p[0] = NIOS2_ldw(4, GETARG_Bx(i), STACK_REG);
-      p[1] = NIOS2_ldw(2, VMM(load_lit), MRBVM_REG);
-      p[2] = NIOS2_callr(2);
-      p[3] = NIOS2_mov(4, 2);
-      p[4] = NIOS2_ldw(2, VMM(raise_err), MRBVM_REG);
-      p[5] = NIOS2_callr(2);
+      allocseq(s, 6);
+      genop(s, NIOS2_ldw(4, GETARG_Bx(i), STACK_REG));
+      genop(s, NIOS2_ldw(2, VMM(load_lit), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_mov(4, 2));
+      genop(s, NIOS2_ldw(2, VMM(raise_err), MRBVM_REG));
+      genop(s, NIOS2_callr(2));
       break;
     default:
       return "unknown instruction";
