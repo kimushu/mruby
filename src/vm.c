@@ -22,6 +22,8 @@
 #include "opcode.h"
 #include "value_array.h"
 
+#ifdef MRB_MACHINE_RITE
+
 #ifndef ENABLE_STDIO
 #if defined(__cplusplus)
 extern "C" {
@@ -2127,3 +2129,4 @@ mrb_run(mrb_state *mrb, struct RProc *proc, mrb_value self)
   }
   END_DISPATCH;
 }
+#endif  /* MRB_MACHINE_RITE */

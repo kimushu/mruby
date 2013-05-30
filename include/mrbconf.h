@@ -27,7 +27,7 @@
 //#define MRB_ENDIAN_BIG
 
 /* represent mrb_value as a word (natural unit of data for the processor) */
-// #define MRB_WORD_BOXING
+//#define MRB_WORD_BOXING
 
 /* argv max size in mrb_funcall */
 //#define MRB_FUNCALL_ARGC_MAX 16
@@ -109,6 +109,16 @@
 # define PRIXMRB_INT PRIX32
 #endif
 typedef short mrb_sym;
+
+/* check machine type */
+#ifdef MRB_MACHINE_NIOS2
+# ifndef __NIOS2__
+#  error "MRB_MACHINE_NIOS2 must be used on Nios2 target"
+# endif
+# define MRB_WORD_BOXING
+#else
+# define MRB_MACHINE_RITE
+#endif
 
 /* define ENABLE_XXXX from DISABLE_XXX */
 #ifndef DISABLE_STDIO

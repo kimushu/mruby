@@ -90,6 +90,6 @@ end
 
 MRuby::CrossBuild.new('nios2') do |conf|
   toolchain :nios2
-  # conf.cc.defines << "MRB_MACHINE_NIOS2"
+  conf.cc.defines << "MRB_MACHINE_NIOS2"
   conf.cc.defines << "MRB_CONVERTER_NIOS2"
 end
