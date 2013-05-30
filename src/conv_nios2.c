@@ -140,7 +140,7 @@ genop(convert_scope *s, uint32_t c)
 static const char *
 convert_iseq(convert_scope *s)
 {
-  mrb_code i, *p;
+  mrb_code i;
   uint32_t sbx, sign;
   mrb_code *src_pc;
   size_t src_ilen;
