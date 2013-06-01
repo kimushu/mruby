@@ -21,8 +21,9 @@
 #include "error.h"
 #include "opcode.h"
 #include "value_array.h"
-
-#ifdef MRB_MACHINE_RITE
+#ifdef MRB_MACHINE_NIOS2
+#include "mruby/vm_nios2.h"
+#endif
 
 #ifndef ENABLE_STDIO
 #if defined(__cplusplus)
@@ -508,6 +509,9 @@ argnum_error(mrb_state *mrb, int num)
   exc = mrb_exc_new3(mrb, E_ARGUMENT_ERROR, str);
   mrb->exc = mrb_obj_ptr(exc);
 }
+
+#ifdef MRB_MACHINE_RITE
+/* RiteVM */
 
 #ifdef ENABLE_DEBUG
 #define CODE_FETCH_HOOK(mrb, irep, pc, regs) ((mrb)->code_fetch_hook ? (mrb)->code_fetch_hook((mrb), (irep), (pc), (regs)) : NULL)
@@ -2129,4 +2133,40 @@ mrb_run(mrb_state *mrb, struct RProc *proc, mrb_value self)
   }
   END_DISPATCH;
 }
-#endif  /* MRB_MACHINE_RITE */
+
+#elif defined(MRB_MACHINE_NIOS2)
+/* Nios2 */
+
+mrb_value
+mrb_run(mrb_state *mrb, struct RProc *proc, mrb_value self)
+{
+  mrb_irep *irep = proc->body.irep;
+  int ai = mrb_gc_arena_save(mrb);
+  jmp_buf c_jmp;
+
+  if (setjmp(c_jmp) == 0) {
+    mrb->jmp = &c_jmp;
+  }
+  else {
+    /* TODO: L_RAISE */
+  }
+
+  if (!mrb->vm_context) {
+    mrb_vm_context_init(mrb);
+  }
+  mrb->vm_context->ai = ai;
+
+  if (!mrb->c->stack) {
+    stack_init(mrb);
+  }
+  stack_extend(mrb, irep->nregs, irep->nregs);
+  mrb->c->ci->proc = proc;
+  mrb->c->ci->nregs = irep->nregs + 1;
+  mrb->c->stack[0] = self;
+
+  return mrb_vm_exec(mrb->vm_context, irep->iseq);
+}
+
+#else /* no MRB_MACHINE_xxxx */
+# error "No VM type defined"
+#endif

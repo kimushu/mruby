@@ -10,15 +10,22 @@
 #include "mruby/value.h"
 
 #define NIOS2_STACK_REG         21  /* r21 (Callee-saved) */
-#define NIOS2_MRBVM_REG         20  /* r20 (Callee-saved) */
+#define NIOS2_VMCTX_REG         20  /* r20 (Callee-saved) */
 
 #define NIOS2_BINARY_IDENTIFIER "NIOS"
 #define NIOS2_BINARY_FORMAT_VER "2N01"
 #define NIOS2_COMPILER_NAME     "KIMS"
 #define NIOS2_COMPILER_VERSION  "0000"
 
-typedef struct mrb_nios2_vm {
-  mrb_value (*argary)         (uint32_t bx);
+typedef struct mrb_pair {
+  mrb_value first;
+  mrb_value second;
+} mrb_pair;
+
+typedef struct mrb_vm_context {
+  mrb_state *mrb;
+
+  mrb_pair  (*argary)         (uint32_t bx);
   void      (*ary_cat)        (mrb_value recv, mrb_value other);
   mrb_value (*ary_fetch)      (mrb_value recv, uint32_t index);
   mrb_value (*ary_new)        (mrb_value *array, uint32_t max);
@@ -66,6 +73,14 @@ typedef struct mrb_nios2_vm {
   mrb_value cv;
   mrb_value iv;
   mrb_value cnst;
-} mrb_nios2_vm;
+
+  mrb_irep *irep;
+  mrb_sym *syms;
+  mrb_value *pool;
+  int ai;
+} mrb_vm_context;
+
+void mrb_vm_context_init(mrb_state *mrb);
+mrb_value mrb_vm_exec(mrb_state *mrb, mrb_code *code);
 
 #endif  /* MRUBY_VM_NIOS2_H */

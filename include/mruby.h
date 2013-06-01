@@ -156,6 +156,9 @@ typedef struct mrb_state {
   struct RClass *eStandardError_class;
 
   struct mrb_machine *machine;
+#ifndef MRB_MACHINE_RITE
+  struct mrb_vm_context *vm_context;
+#endif
 
   void *ud; /* auxiliary data */
 } mrb_state;
