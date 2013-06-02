@@ -321,7 +321,7 @@ convert_iseq(convert_scope *s)
       /* sBx     pc+=sBx */
       allocseq(s, 1);
       genop(s, NIOS2_br(GETARG_sBx(i))); /* placeholder */
-      *s->rite_pc |= MKARG_Ax(0+1);
+      *src_pc |= MKARG_Ax(0+1);
       break;
     case OP_JMPIF:
       /* A sBx   if R(A) pc+=sBx */
@@ -330,7 +330,7 @@ convert_iseq(convert_scope *s)
       genop(s, NIOS2_rori(2, 2, MRB_FIXNUM_SHIFT));
       genop(s, NIOS2_cmpleui(2, 2, MRB_Qfalse>>MRB_FIXNUM_SHIFT));
       genop(s, NIOS2_beq(0, 2, GETARG_sBx(i))); /* placeholder */
-      *s->rite_pc |= MKARG_Ax(3+1);
+      *src_pc |= MKARG_Ax(3+1);
       break;
     case OP_JMPNOT:
       /* A sBx   if !R(A) pc+=sBx */
@@ -339,7 +339,7 @@ convert_iseq(convert_scope *s)
       genop(s, NIOS2_rori(2, 2, MRB_FIXNUM_SHIFT));
       genop(s, NIOS2_cmpleui(2, 2, MRB_Qfalse>>MRB_FIXNUM_SHIFT));
       genop(s, NIOS2_bne(0, 2, GETARG_sBx(i))); /* placeholder */
-      *s->rite_pc |= MKARG_Ax(3+1);
+      *src_pc |= MKARG_Ax(3+1);
       break;
     case OP_ONERR:
       /* sBx     rescue_push(pc+sBx) */
@@ -348,7 +348,7 @@ convert_iseq(convert_scope *s)
       genop(s, NIOS2_ldw(2, CTX(rescue_push), NIOS2_VMCTX_REG));
       genop(s, NIOS2_movi(5, GETARG_sBx(i)));  /* placeholder */
       genop(s, NIOS2_callr(2));
-      *s->rite_pc |= MKARG_Ax(2+1);
+      *src_pc |= MKARG_Ax(2+1);
       break;
     case OP_RESCUE:
       /* A       clear(exc); R(A) := exception (ignore when A=0) */
@@ -450,7 +450,6 @@ convert_iseq(convert_scope *s)
         }
       }
       else {
-        allocseq(s, 3);
         genop(s, NIOS2_movui(4, GETARG_Ax(i)));
       }
       genop(s, NIOS2_callr(2));
@@ -639,6 +638,14 @@ convert_iseq(convert_scope *s)
       genop(s, NIOS2_ldw(2, CTX(ary_new), NIOS2_VMCTX_REG));
       genop(s, NIOS2_callr(2));
       genop(s, NIOS2_stw(2, GETARG_A(i)*4, NIOS2_STACK_REG));
+      break;
+    case OP_ARYCAT:
+      /* A B     ary_cat(R(A),R(B)) */
+      allocseq(s, 4);
+      genop(s, NIOS2_ldw(4, GETARG_A(i)*4, NIOS2_STACK_REG));
+      genop(s, NIOS2_ldw(5, GETARG_B(i)*4, NIOS2_STACK_REG));
+      genop(s, NIOS2_ldw(2, CTX(ary_cat), NIOS2_VMCTX_REG));
+      genop(s, NIOS2_callr(2));
       break;
     case OP_ARYPUSH:
       /* A B     ary_push(R(A),R(B)) */
@@ -857,6 +864,7 @@ convert_irep(mrb_state *mrb, mrb_irep *irep)
     mrb_free(mrb, irep->iseq);
     irep->iseq = scope.new_iseq;
     irep->ilen = scope.pc;
+    irep->lines = 0;  /* TODO */
   }
   else {
     mrb_free(mrb, scope.new_iseq);
