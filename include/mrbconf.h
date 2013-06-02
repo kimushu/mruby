@@ -116,8 +116,10 @@ typedef short mrb_sym;
 #  error "MRB_MACHINE_NIOS2 must be used on Nios2 target"
 # endif
 # define MRB_WORD_BOXING
+# define MRB_MACHINE_NAME   "nios2"
 #else
 # define MRB_MACHINE_RITE
+# define MRB_MACHINE_NAME   "rite"
 #endif
 
 /* define ENABLE_XXXX from DISABLE_XXX */
