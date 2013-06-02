@@ -10,6 +10,9 @@
 #include "mruby/class.h"
 #include "mruby/irep.h"
 #include "mruby/variable.h"
+#ifdef MRB_MACHINE_NIOS2
+#include "mruby/vm_nios2.h"
+#endif
 
 void mrb_init_heap(mrb_state*);
 void mrb_init_core(mrb_state*);
@@ -34,10 +37,14 @@ mrb_open_allocf(mrb_allocf f, void *ud)
   mrb->allocf = f;
   mrb->current_white_part = MRB_GC_WHITE_A;
 
+  mrb_set_machine(mrb, MRB_MACHINE_NAME);
   mrb_init_heap(mrb);
   mrb->c = (struct mrb_context*)mrb_malloc(mrb, sizeof(struct mrb_context));
   *mrb->c = mrb_context_zero;
   mrb->root_c = mrb->c;
+#ifndef MRB_MACHINE_RITE
+  mrb_vm_context_init(mrb);
+#endif
   mrb_init_core(mrb);
 
   return mrb;
@@ -187,4 +194,21 @@ mrb_top_self(mrb_state *mrb)
     mrb_define_singleton_method(mrb, mrb->top_self, "to_s", inspect_main, MRB_ARGS_NONE());
   }
   return mrb_obj_value(mrb->top_self);
+}
+
+int
+mrb_set_machine(mrb_state *mrb, const char *name)
+{
+  if (!name || strcmp(name, "rite") == 0) {
+    mrb->machine = NULL;
+  }
+#ifdef MRB_CONVERTER_NIOS2
+  else if (strcmp(name, "nios2") == 0) {
+    mrb->machine = &machine_nios2;
+  }
+#endif
+  else {
+    return -1;
+  }
+  return 0;
 }

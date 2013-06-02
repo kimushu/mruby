@@ -2876,20 +2876,3 @@ mrb_generate_code(mrb_state *mrb, parser_state *p)
 
   return start;
 }
-
-int
-mrb_set_machine(mrb_state *mrb, const char *name)
-{
-  if (!name || strcmp(name, "rite") == 0) {
-    mrb->machine = NULL;
-  }
-#ifdef MRB_CONVERTER_NIOS2
-  else if (strcmp(name, "nios2") == 0) {
-    mrb->machine = &machine_nios2;
-  }
-#endif
-  else {
-    return -1;
-  }
-  return 0;
-}
