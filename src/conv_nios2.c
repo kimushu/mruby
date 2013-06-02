@@ -14,6 +14,7 @@
 #include "opcode.h"
 #include "asm_nios2.h"
 
+#define JUMPOFFSET_BITS       5
 #define ESTIMATE_RITE2NIOS    4
 #define CALL_MAXARGS 127
 
@@ -142,7 +143,7 @@ convert_iseq(convert_scope *s)
       src_ilen > 0;
       --src_ilen, ++src_pc) {
     i = *src_pc;
-    *src_pc = MKOP_Ax(OP_NOP, s->pc << 4);
+    *src_pc = MKOP_Ax(OP_NOP, s->pc << JUMPOFFSET_BITS);
 
     switch(GET_OPCODE(i)) {
     case OP_NOP:
@@ -825,15 +826,15 @@ convert_iseq(convert_scope *s)
     mrb_code *inst_update;
     i = *src_pc;
 
-    pos = GETARG_Ax(i) & 15;
+    pos = GETARG_Ax(i) & ((1<<JUMPOFFSET_BITS)-1);
     if (pos == 0) {
       continue;
     }
 
-    from_pc = (GETARG_Ax(i) >> 4) + pos;
+    from_pc = (GETARG_Ax(i) >> JUMPOFFSET_BITS) + pos;
     inst_update = &s->new_iseq[from_pc - 1];
     sbx = NIOS2_GET_IMM16(*inst_update);
-    to_pc = GETARG_Ax(src_pc[sbx]) >> 4;
+    to_pc = GETARG_Ax(src_pc[sbx]) >> JUMPOFFSET_BITS;
 
     *inst_update = (*inst_update & ~NIOS2_IMM16(0xffff)) |
       NIOS2_IMM16(to_pc - from_pc);
