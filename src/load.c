@@ -16,6 +16,7 @@
 #include "mruby/irep.h"
 #include "mruby/proc.h"
 #include "mruby/string.h"
+#include "mruby/compile.h"
 
 #if !defined(_WIN32) && SIZE_MAX < UINT32_MAX
 # define SIZE_ERROR_MUL(x, y) ((x) > SIZE_MAX / (y))
@@ -28,6 +29,11 @@
 #if CHAR_BIT != 8
 # error This code assumes CHAR_BIT == 8
 #endif
+
+#define BINARY_IDENTIFIER(mrb)  \
+  (mrb->machine ? mrb->machine->binary_identifier : RITE_BINARY_IDENTIFIER)
+#define BINARY_FORMAT_VER(mrb)  \
+  (mrb->machine ? mrb->machine->binary_format_ver : RITE_BINARY_FORMAT_VER)
 
 static void
 irep_free(size_t sirep, mrb_state *mrb)
@@ -302,15 +308,15 @@ error_exit:
 
 
 static int
-read_rite_binary_header(const uint8_t *bin, size_t *bin_size, uint16_t *crc)
+read_rite_binary_header(mrb_state *mrb, const uint8_t *bin, size_t *bin_size, uint16_t *crc)
 {
   const struct rite_binary_header *header = (const struct rite_binary_header *)bin;
 
-  if (memcmp(header->binary_identify, RITE_BINARY_IDENTIFIER, sizeof(header->binary_identify)) != 0) {
+  if (memcmp(header->binary_identify, BINARY_IDENTIFIER(mrb), sizeof(header->binary_identify)) != 0) {
     return MRB_DUMP_INVALID_FILE_HEADER;
   }
 
-  if (memcmp(header->binary_version, RITE_BINARY_FORMAT_VER, sizeof(header->binary_version)) != 0) {
+  if (memcmp(header->binary_version, BINARY_FORMAT_VER(mrb), sizeof(header->binary_version)) != 0) {
     return MRB_DUMP_INVALID_FILE_HEADER;
   }
 
@@ -337,7 +343,7 @@ mrb_read_irep(mrb_state *mrb, const uint8_t *bin)
     return MRB_DUMP_INVALID_ARGUMENT;
   }
 
-  result = read_rite_binary_header(bin, &bin_size, &crc);
+  result = read_rite_binary_header(mrb, bin, &bin_size, &crc);
   if (result != MRB_DUMP_OK) {
     return result;
   }
@@ -555,7 +561,7 @@ mrb_read_irep_file(mrb_state *mrb, FILE* fp)
     mrb_free(mrb, buf);
     return MRB_DUMP_READ_FAULT;
   }
-  result = read_rite_binary_header(buf, NULL, &crc);
+  result = read_rite_binary_header(mrb, buf, NULL, &crc);
   mrb_free(mrb, buf);
   if (result != MRB_DUMP_OK) {
     return result;

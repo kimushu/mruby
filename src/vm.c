@@ -2151,9 +2151,6 @@ mrb_run(mrb_state *mrb, struct RProc *proc, mrb_value self)
     /* TODO: L_RAISE */
   }
 
-  if (!mrb->vm_context) {
-    mrb_vm_context_init(mrb);
-  }
   mrb->vm_context->ai = ai;
 
   if (!mrb->c->stack) {
@@ -2164,7 +2161,7 @@ mrb_run(mrb_state *mrb, struct RProc *proc, mrb_value self)
   mrb->c->ci->nregs = irep->nregs + 1;
   mrb->c->stack[0] = self;
 
-  return mrb_vm_exec(mrb->vm_context, irep->iseq);
+  return mrb_vm_exec(mrb, irep->iseq);
 }
 
 #else /* no MRB_MACHINE_xxxx */
