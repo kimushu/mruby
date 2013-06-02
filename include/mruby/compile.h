@@ -145,19 +145,6 @@ struct mrb_parser_state {
   jmp_buf jmp;
 };
 
-/* machines */
-struct mrb_machine {
-  char binary_identifier[4];
-  char binary_format_ver[4];
-  char compiler_name[4];
-  char compiler_version[4];
-  const char *(*convert_irep)(mrb_state *mrb, struct mrb_irep *irep);
-  void (*codedump)(mrb_state *mrb, int n);
-};
-#ifdef MRB_CONVERTER_NIOS2
-extern struct mrb_machine machine_nios2;
-#endif
-
 struct mrb_parser_state* mrb_parser_new(mrb_state*);
 void mrb_parser_free(struct mrb_parser_state*);
 void mrb_parser_parse(struct mrb_parser_state*,mrbc_context*);
@@ -169,7 +156,6 @@ struct mrb_parser_state* mrb_parse_file(mrb_state*,FILE*,mrbc_context*);
 struct mrb_parser_state* mrb_parse_string(mrb_state*,const char*,mrbc_context*);
 struct mrb_parser_state* mrb_parse_nstring(mrb_state*,const char*,int,mrbc_context*);
 int mrb_generate_code(mrb_state*, struct mrb_parser_state*);
-int mrb_set_machine(mrb_state*, const char*);
 
 /* program load functions */
 #ifdef ENABLE_STDIO

@@ -163,6 +163,19 @@ typedef struct mrb_state {
   void *ud; /* auxiliary data */
 } mrb_state;
 
+/* machines */
+struct mrb_machine {
+  char binary_identifier[4];
+  char binary_format_ver[4];
+  char compiler_name[4];
+  char compiler_version[4];
+  const char *(*convert_irep)(mrb_state *mrb, struct mrb_irep *irep);
+  void (*codedump)(mrb_state *mrb, int n);
+};
+#ifdef MRB_CONVERTER_NIOS2
+extern struct mrb_machine machine_nios2;
+#endif
+
 typedef mrb_value (*mrb_func_t)(mrb_state *mrb, mrb_value);
 struct RClass *mrb_define_class(mrb_state *, const char*, struct RClass*);
 struct RClass *mrb_define_module(mrb_state *, const char*);
@@ -256,6 +269,7 @@ mrb_state* mrb_open(void);
 mrb_state* mrb_open_allocf(mrb_allocf, void *ud);
 void mrb_irep_free(mrb_state*, struct mrb_irep*);
 void mrb_close(mrb_state*);
+int mrb_set_machine(mrb_state*, const char*);
 
 mrb_value mrb_top_self(mrb_state *);
 mrb_value mrb_run(mrb_state*, struct RProc*, mrb_value);
