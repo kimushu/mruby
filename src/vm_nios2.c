@@ -42,7 +42,7 @@
 
 #define PROLOGUE_ret \
   mrb_code *ret;\
-  asm("mov %0, ra": "=r"(regs))
+  asm("mov %0, ra": "=r"(ret))
 
 #define PROLOGUE_regs_mrb \
   PROLOGUE_regs; PROLOGUE_mrb
@@ -777,9 +777,9 @@ mrb_value
 NAKED mrb_vm_exec(mrb_state *mrb, mrb_code *code)
 {
   asm("\t"
-  "ldw  r%0, %2(r4)\n\t"
-  "ldw  r%1, %3(r%0)\n\t"
-  "ldw  r%1, %4(r%1)\n\t"
+  "ldw  r%0, %2(r4)\n\t"  /* VMENV_REG = mrb->vm_env; */
+  "ldw  r%1, %3(r4)\n\t"  /* temp = mrb->c; */
+  "ldw  r%1, %4(r%1)\n\t" /* STACK_REG = temp->stack; */
   "jmp  r5\n"
   ::
   "i"(NIOS2_VMENV_REG), "i"(NIOS2_STACK_REG),

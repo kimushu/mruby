@@ -790,7 +790,8 @@ convert_iseq(convert_scope *s)
     case OP_METHOD:
       /* A B     R(A).newmethod(mSym(B),R(A+1)) */
       loadsym(s, 5, GETARG_B(i));
-      allocseq(s, 3);
+      allocseq(s, 4);
+      genop(s, NIOS2_ldw(4, GETARG_A(i)*4, NIOS2_STACK_REG));
       genop(s, NIOS2_ldw(6, (GETARG_A(i)+1)*4, NIOS2_STACK_REG));
       genop(s, NIOS2_ldw(2, ENV(newmethod), NIOS2_VMENV_REG));
       genop(s, NIOS2_callr(2));
