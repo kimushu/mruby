@@ -43,7 +43,7 @@ mrb_open_allocf(mrb_allocf f, void *ud)
   *mrb->c = mrb_context_zero;
   mrb->root_c = mrb->c;
 #ifndef MRB_MACHINE_RITE
-  mrb_vm_context_init(mrb);
+  mrb_vm_env_init(mrb);
 #endif
   mrb_init_core(mrb);
 

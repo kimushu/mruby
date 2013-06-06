@@ -157,7 +157,7 @@ typedef struct mrb_state {
 
   struct mrb_machine *machine;
 #ifndef MRB_MACHINE_RITE
-  struct mrb_vm_context *vm_context;
+  struct mrb_vm_env *vm_env;
 #endif
 
   void *ud; /* auxiliary data */
