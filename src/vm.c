@@ -745,7 +745,6 @@ mrb_run(mrb_state *mrb, struct RProc *proc, mrb_value self)
 
     CASE(OP_SETUPVAR) {
       /* A B C  uvset(B,C,R(A)) */
-      /* A B C  R(A) := uvget(B,C) */
       int up = GETARG_C(i);
 
       struct REnv *e = uvenv(mrb, up);
@@ -2177,6 +2176,18 @@ void
 mrb_vm_ecall(mrb_state *mrb, int i)
 {
   ecall(mrb, i);
+}
+
+void
+mrb_vm_localjump_error(mrb_state *mrb, localjump_error_kind kind)
+{
+  localjump_error(mrb, kind);
+}
+
+void
+mrb_vm_argnum_error(mrb_state *mrb, int num)
+{
+  argnum_error(mrb, num);
 }
 
 mrb_value

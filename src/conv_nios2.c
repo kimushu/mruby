@@ -14,6 +14,8 @@
 #include "opcode.h"
 #include "asm_nios2.h"
 
+#define DEBUG_RITEOP
+
 #define JUMPOFFSET_BITS       5
 #define ESTIMATE_RITE2NIOS    4
 #define CALL_MAXARGS 127
@@ -51,6 +53,11 @@ struct mrb_machine machine_nios2 = {
 
 enum nios2_disasm_format {
   fmt_none,
+#ifdef DEBUG_RITEOP
+  fmt_dbg,
+#else
+  fmt_dbg = fmt_none,
+#endif
   fmt_opx,
   fmt_cab,
   fmt_basv,
@@ -110,10 +117,107 @@ static const struct nios2_disasm_map disasm_mapx[] = {
   {"cmpgeu",fmt_cab}, {"initi", fmt_a},   {NULL,    fmt_none},{NULL,    fmt_none},
   {NULL,    fmt_none},{"trap",  fmt_i5},  {"wrctl", fmt_na},  {NULL,    fmt_none},
   {"cmpltu",fmt_cab}, {"add",   fmt_cab}, {NULL,    fmt_none},{NULL,    fmt_none},
-  {"break", fmt_i5},  {NULL,    fmt_none},{"sync",  fmt_none},{NULL,    fmt_none},
+  {"break", fmt_i5},  {NULL,    fmt_none},{"sync",  fmt_dbg}, {NULL,    fmt_none},
   {NULL,    fmt_none},{"sub",   fmt_cab}, {"srai",  fmt_cai5},{"sra",   fmt_cab},
   {NULL,    fmt_none},{NULL,    fmt_none},{NULL,    fmt_none},{NULL,    fmt_none},
 };
+
+#ifdef DEBUG_RITEOP
+static const char * disasm_riteop[] = {
+  "OP_NOP",
+  "OP_MOVE",
+  "OP_LOADL",
+  "OP_LOADI",
+  "OP_LOADSYM",
+  "OP_LOADNIL",
+  "OP_LOADSELF",
+  "OP_LOADT",
+  "OP_LOADF",
+
+  "OP_GETGLOBAL",
+  "OP_SETGLOBAL",
+  "OP_GETSPECIAL",
+  "OP_SETSPECIAL",
+  "OP_GETIV",
+  "OP_SETIV",
+  "OP_GETCV",
+  "OP_SETCV",
+  "OP_GETCONST",
+  "OP_SETCONST",
+  "OP_GETMCNST",
+  "OP_SETMCNST",
+  "OP_GETUPVAR",
+  "OP_SETUPVAR",
+
+  "OP_JMP",
+  "OP_JMPIF",
+  "OP_JMPNOT",
+  "OP_ONERR",
+  "OP_RESCUE",
+  "OP_POPERR",
+  "OP_RAISE",
+  "OP_EPUSH",
+  "OP_EPOP",
+
+  "OP_SEND",
+  "OP_SENDB",
+  "OP_FSEND",
+  "OP_CALL",
+  "OP_SUPER",
+  "OP_ARGARY",
+  "OP_ENTER",
+  "OP_KARG",
+  "OP_KDICT",
+
+  "OP_RETURN",
+  "OP_TAILCALL",
+  "OP_BLKPUSH",
+
+  "OP_ADD",
+  "OP_ADDI",
+  "OP_SUB",
+  "OP_SUBI",
+  "OP_MUL",
+  "OP_DIV",
+  "OP_EQ",
+  "OP_LT",
+  "OP_LE",
+  "OP_GT",
+  "OP_GE",
+
+  "OP_ARRAY",
+  "OP_ARYCAT",
+  "OP_ARYPUSH",
+  "OP_AREF",
+  "OP_ASET",
+  "OP_APOST",
+
+  "OP_STRING",
+  "OP_STRCAT",
+
+  "OP_HASH",
+  "OP_LAMBDA",
+  "OP_RANGE",
+
+  "OP_OCLASS",
+  "OP_CLASS",
+  "OP_MODULE",
+  "OP_EXEC",
+  "OP_METHOD",
+  "OP_SCLASS",
+  "OP_TCLASS",
+
+  "OP_DEBUG",
+  "OP_STOP",
+  "OP_ERR",
+
+  "OP_RSVD1",
+  "OP_RSVD2",
+  "OP_RSVD3",
+  "OP_RSVD4",
+  "OP_RSVD5",
+};
+#endif
 
 static void
 allocseq(convert_scope *s, size_t space)
@@ -183,6 +287,10 @@ convert_iseq(convert_scope *s)
     i = *src_pc;
     *src_pc = MKOP_Ax(OP_NOP, s->pc << JUMPOFFSET_BITS);
 
+#ifdef DEBUG_RITEOP
+    allocseq(s, 1);
+    genop(s, NIOS2_sync()|NIOS2_A(GET_OPCODE(i)>>5)|NIOS2_B(GET_OPCODE(i)));
+#endif
     switch (GET_OPCODE(i)) {
     case OP_NOP:
       /*         no operation */
@@ -219,7 +327,9 @@ convert_iseq(convert_scope *s)
     case OP_LOADSYM:
       /* A Bx    R(A) := Sym(Bx) */
       loadsym(s, 2, GETARG_Bx(i));
-      allocseq(s, 1);
+      allocseq(s, 3);
+      genop(s, NIOS2_slli(2, 2, MRB_SPECIAL_SHIFT));
+      genop(s, NIOS2_ori(2, 2, MRB_SYMBOL_FLAG));
       genop(s, NIOS2_stw(2, GETARG_A(i)*4, NIOS2_STACK_REG));
       break;
     case OP_LOADNIL:
@@ -378,9 +488,9 @@ convert_iseq(convert_scope *s)
     case OP_ONERR:
       /* sBx     rescue_push(pc+sBx) */
       allocseq(s, 4);
-      genop(s, NIOS2_nextpc(4));
       genop(s, NIOS2_ldw(2, ENV(rescue_push), NIOS2_VMENV_REG));
-      genop(s, NIOS2_movi(5, GETARG_sBx(i)));  /* placeholder */
+      genop(s, NIOS2_movi(4, GETARG_sBx(i)));  /* placeholder */
+      genop(s, NIOS2_subi(4, 4, 2));
       genop(s, NIOS2_callr(2));
       *src_pc |= MKARG_Ax(2+1);
       break;
@@ -436,9 +546,9 @@ convert_iseq(convert_scope *s)
       /* A B C   R(A) := call(R(A),mSym(B),R(A+1),...,R(A+C)) */
       loadsym(s, 5, GETARG_B(i));
       allocseq(s, 4);
-      genop(s, NIOS2_addi(4, NIOS2_STACK_REG, GETARG_A(i)*4));
+      genop(s, NIOS2_movi(4, GETARG_A(i)));
       if (GETARG_C(i) < CALL_MAXARGS) {
-        genop(s, NIOS2_movui(6, GETARG_C(i)));
+        genop(s, NIOS2_ori(4, 4, GETARG_C(i) << 9));
         genop(s, NIOS2_ldw(2, ENV(send_normal), NIOS2_VMENV_REG));
       }
       else {
@@ -456,11 +566,15 @@ convert_iseq(convert_scope *s)
     case OP_SUPER:
       /* A B C   R(A) := super(R(A+1),... ,R(A+C-1)) */
       allocseq(s, 5);
-      genop(s, NIOS2_ldw(2, ENV(super), NIOS2_VMENV_REG));
-      genop(s, NIOS2_addi(4, NIOS2_STACK_REG, (GETARG_A(i)+1)*4));
-      genop(s, NIOS2_movui(5, GETARG_C(i)));
+      genop(s, NIOS2_movi(4, GETARG_A(i)));
+      if (GETARG_C(i) < CALL_MAXARGS) {
+        genop(s, NIOS2_ori(4, 4, GETARG_C(i) << 9));
+        genop(s, NIOS2_ldw(2, ENV(super_normal), NIOS2_VMENV_REG));
+      }
+      else {
+        genop(s, NIOS2_ldw(2, ENV(super_array), NIOS2_VMENV_REG));
+      }
       genop(s, NIOS2_callr(2));
-      genop(s, NIOS2_stw(2, GETARG_A(i)*4, NIOS2_STACK_REG));
       break;
     case OP_ARGARY:
       /* A Bx   R(A) := argument array (16=6:1:5:4) */
@@ -497,7 +611,6 @@ convert_iseq(convert_scope *s)
       genop(s, NIOS2_movi(5, GETARG_B(i)));
       genop(s, NIOS2_ldw(2, ENV(ret), NIOS2_VMENV_REG));
       genop(s, NIOS2_ldw(4, GETARG_A(i)*4, NIOS2_STACK_REG));
-      genop(s, NIOS2_callr(2));
       genop(s, NIOS2_jmp(2));
       break;
     /* case OP_TAILCALL: */
@@ -761,9 +874,9 @@ convert_iseq(convert_scope *s)
       break;
     case OP_CLASS:
       /* A B     R(A) := newclass(R(A),mSym(B),R(A+1)) */
+      loadsym(s, 5, GETARG_B(i));
       allocseq(s, 6);
       genop(s, NIOS2_ldw(4, GETARG_A(i)*4, NIOS2_STACK_REG));
-      genop(s, NIOS2_movui(5, GETARG_B(i)));
       genop(s, NIOS2_ldw(6, (GETARG_A(i)+1)*4, NIOS2_STACK_REG));
       genop(s, NIOS2_ldw(2, ENV(newclass), NIOS2_VMENV_REG));
       genop(s, NIOS2_callr(2));
@@ -982,6 +1095,19 @@ L_RETRY:
       break;
     case fmt_na:
       break;
+#ifdef DEBUG_RITEOP
+    case fmt_dbg:
+      {
+        int op = (NIOS2_GET_A(c) << 5) | NIOS2_GET_B(c);
+        if (op < (sizeof(disasm_riteop) / sizeof(*disasm_riteop))) {
+          printf("(%s)\n", disasm_riteop[op]);
+        }
+        else {
+          printf("(Unknown RiteVM opcode 0x%x)\n", op);
+        }
+      }
+      break;
+#endif
     }
   }
   printf("\n");

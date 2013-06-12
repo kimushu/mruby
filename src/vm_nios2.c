@@ -16,6 +16,7 @@
 #include "mruby/variable.h"
 #include "mruby/vm_nios2.h"
 #include "value_array.h"
+#include "error.h"
 #include "opcode.h"
 
 #ifdef MRB_MACHINE_NIOS2
@@ -25,33 +26,102 @@
 #define TO_STR(x) TO_STR_(x)
 #define TO_STR_(x) #x
 
-#define PROLOGUE_mrb \
-  mrb_state *mrb;\
-  asm("ldw %0, %1(r" TO_STR(NIOS2_VMENV_REG) ")":\
-      "=r"(mrb): "i"(offsetof(mrb_vm_env, mrb)))
+#define DPRINTF(mrb, fmt, ...) \
+  if(mrb->vm_env->dprintf) mrb->vm_env->dprintf(fmt, ## __VA_ARGS__)
 
-#define PROLOGUE_mrb_vmc \
-  PROLOGUE_mrb;\
-  mrb_vm_context *vmc;\
-  asm("ldw %0, %1(r" TO_STR(NIOS2_VMENV_REG) ")":\
-      "=r"(vmc): "i"(offsetof(mrb_vm_env, ctx)))
+#define ENTRY_vme(name, rtype, argc, ...) \
+  static void\
+  NAKED name##_entry(void)\
+  {\
+    asm("\t"\
+    "addi sp, sp, -4\n\t"\
+    "stw  ra, 0(sp)\n\t"\
+    "mov  r%0, r%1\n\t"\
+    "call " #name "\n\t"\
+    "ldw  ra, 0(sp)\n\t"\
+    "addi sp, sp, 4\n\t"\
+    "ret\n"\
+    ::\
+    "i"(argc+4), "i"(NIOS2_VMENV_REG));\
+  }\
+  static rtype\
+  name(__VA_ARGS__, mrb_vm_env *vme)
 
-#define PROLOGUE_regs \
-  mrb_value *regs;\
-  asm("mov %0, r%1": "=r"(regs): "i"(NIOS2_STACK_REG))
+#define ENTRY_vme_regs(name, rtype, argc, ...) \
+  static void\
+  NAKED name##_entry(void)\
+  {\
+    asm("\t"\
+    "addi sp, sp, -4\n\t"\
+    "stw  ra, 0(sp)\n\t"\
+    "mov  r%0, r%1\n\t"\
+    "mov  r%2, r%3\n\t"\
+    "call " #name "\n\t"\
+    "ldw  ra, 0(sp)\n\t"\
+    "addi sp, sp, 4\n\t"\
+    "ret\n"\
+    ::\
+    "i"(argc+4), "i"(NIOS2_VMENV_REG),\
+    "i"(argc+5), "i"(NIOS2_STACK_REG));\
+  }\
+  static rtype\
+  name(__VA_ARGS__, mrb_vm_env *vme, mrb_value *regs)
 
-#define PROLOGUE_ret \
-  mrb_code *ret;\
-  asm("mov %0, ra": "=r"(ret))
+#define ENTRY_mrb(name, rtype, argc, ...)  \
+  static void\
+  NAKED name##_entry(void)\
+  {\
+    asm("\t"\
+    "addi sp, sp, -4\n\t"\
+    "stw  ra, 0(sp)\n\t"\
+    "ldw  r%0, %1(r%2)\n\t"\
+    "call " #name "\n\t"\
+    "ldw  ra, 0(sp)\n\t"\
+    "addi sp, sp, 4\n\t"\
+    "ret\n"\
+    ::\
+    "i"(argc+4), "i"(offsetof(mrb_vm_env, mrb)), "i"(NIOS2_VMENV_REG));\
+  }\
+  static rtype\
+  name(__VA_ARGS__, mrb_state *mrb)
 
-#define PROLOGUE_regs_mrb \
-  PROLOGUE_regs; PROLOGUE_mrb
+typedef struct {
+  mrb_code *pc;     /* 0 */
+  mrb_value *regs;  /* 4 */
+} vm_jmpinfo;
 
-#define PROLOGUE_regs_mrb_vmc \
-  PROLOGUE_regs; PROLOGUE_mrb_vmc
+#define ENTRY_vme_jmp(name, rtype, argc, ...)  \
+  static void\
+  NAKED name##_entry(void)\
+  {\
+    asm("\t"\
+    "addi sp, sp, -8\n\t"\
+    "stw  ra, %0(sp)\n\t"\
+    "stw  r%1, %2(sp)\n\t"\
+    "mov  r%3, r%4\n\t"\
+    "mov  r%5, sp\n\t"\
+    "call " #name "\n\t"\
+    "ldw  r%1, %2(sp)\n\t"\
+    "ldw  ra, %0(sp)\n\t"\
+    "addi sp, sp, 8\n\t"\
+    "ret\n"\
+    ::\
+    "i"(offsetof(vm_jmpinfo, pc)),\
+    "i"(NIOS2_STACK_REG), "i"(offsetof(vm_jmpinfo, regs)),\
+    "i"(argc+4), "i"(NIOS2_VMENV_REG),\
+    "i"(argc+5));\
+  }\
+  static rtype\
+  name(__VA_ARGS__, mrb_vm_env *vme, vm_jmpinfo *jmp)
 
-#define PROLOGUE_regs_mrb_vmc_ret \
-  PROLOGUE_regs; PROLOGUE_mrb_vmc; PROLOGUE_ret
+static const char debug_indents[] = "                ";
+#define DPRINT_INDENT(mrb)    DPRINTF(mrb, "%s", debug_indents + (16 - (mrb->c->ci - mrb->c->cibase)))
+
+typedef enum {
+  LOCALJUMP_ERROR_RETURN = 0,
+  LOCALJUMP_ERROR_BREAK = 1,
+  LOCALJUMP_ERROR_YIELD = 2
+} localjump_error_kind;
 
 void mrb_vm_stack_copy(mrb_value *dst, const mrb_value *src, size_t size);
 void mrb_vm_stack_extend(mrb_state *mrb, int room, int keep);
@@ -60,16 +130,22 @@ struct REnv* mrb_vm_top_env(mrb_state *mrb, struct RProc *proc);
 mrb_callinfo* mrb_vm_cipush(mrb_state *mrb);
 void mrb_vm_cipop(mrb_state *mrb);
 void mrb_vm_ecall(mrb_state *mrb, int i);
+void mrb_vm_localjump_error(mrb_state *mrb, localjump_error_kind kind);
+void mrb_vm_argnum_error(mrb_state *mrb, int num);
 
-static mrb_pair
-vm_argary(uint32_t bx)
+static void vm_raise_exc(mrb_state *mrb);
+static void vm_epilogue(void);
+
+ENTRY_vme_regs(vm_argary, mrb_pair, 1, uint32_t bx)
 {
-  PROLOGUE_regs_mrb_vmc;
   /* A Bx   R(A) := argument array (16=6:1:5:4) */
+  mrb_state *mrb = vme->mrb;
   int m1 = (bx>>10)&0x3f;
   int r  = (bx>>9)&0x1;
   int m2 = (bx>>4)&0x1f;
   int lv = (bx>>0)&0xf;
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_ARGARY (0x%x:0x%x:0x%x:0x%x)\n", m1, r, m2, lv);
   mrb_pair args;
   mrb_value *stack;
 
@@ -81,9 +157,7 @@ vm_argary(uint32_t bx)
       static const char m[] = "super called outside of method";
       exc = mrb_exc_new(mrb, E_NOMETHOD_ERROR, m, sizeof(m) - 1);
       mrb->exc = mrb_obj_ptr(exc);
-      // goto L_RAISE;
-      // TODO
-      while(1);
+      vm_raise_exc(mrb);
     }
     stack = e->stack + 1;
   }
@@ -113,24 +187,21 @@ vm_argary(uint32_t bx)
     rest->len = m1+len+m2;
   }
   args.second = stack[m1+r+m2];
-  mrb_gc_arena_restore(mrb, vmc->ai);
+  mrb_gc_arena_restore(mrb, vme->ctx->ai);
 
   return args;
 }
 
-static void
-vm_ary_cat(mrb_value recv, mrb_value other)
+ENTRY_vme(vm_ary_cat, void, 2, mrb_value recv, mrb_value other)
 {
-  PROLOGUE_mrb_vmc;
   /* A B            mrb_ary_concat(R(A),R(B)) */
+  mrb_state *mrb = vme->mrb;
   mrb_ary_concat(mrb, recv, mrb_ary_splat(mrb, other));
-  mrb_gc_arena_restore(mrb, vmc->ai);
+  mrb_gc_arena_restore(mrb, vme->ctx->ai);
 }
 
-static mrb_value
-vm_ary_fetch(mrb_value recv, uint32_t index)
+ENTRY_mrb(vm_ary_fetch, mrb_value, 2, mrb_value recv, uint32_t index)
 {
-  PROLOGUE_mrb;
   /* A B C          R(A) := R(B)[C] */
   if (!mrb_array_p(recv)) {
     if (index == 0) {
@@ -145,22 +216,20 @@ vm_ary_fetch(mrb_value recv, uint32_t index)
   }
 }
 
-static mrb_value
-vm_ary_new(mrb_value *array, uint32_t max)
+ENTRY_vme(vm_ary_new, mrb_value, 2, mrb_value *array, uint32_t max)
 {
-  PROLOGUE_mrb_vmc;
   /* A B C          R(A) := ary_new(R(B),R(B+1)..R(B+C)) */
+  mrb_state *mrb = vme->mrb;
   mrb_value ary;
   ary = mrb_ary_new_from_values(mrb, max, array);
-  mrb_gc_arena_restore(mrb, vmc->ai);
+  mrb_gc_arena_restore(mrb, vme->ctx->ai);
   return ary;
 }
 
-static void
-vm_ary_post(mrb_value *array, uint32_t pre, uint32_t post)
+ENTRY_vme(vm_ary_post, void, 3, mrb_value *array, uint32_t pre, uint32_t post)
 {
-  PROLOGUE_mrb_vmc;
   /* A B C  *R(A),R(A+1)..R(A+C) := R(A) */
+  mrb_state *mrb = vme->mrb;
   int a = 0;
   mrb_value v = array[0];
 
@@ -193,61 +262,59 @@ vm_ary_post(mrb_value *array, uint32_t pre, uint32_t post)
       }
     }
   }
-  mrb_gc_arena_restore(mrb, vmc->ai);
+  mrb_gc_arena_restore(mrb, vme->ctx->ai);
 }
 
-static void
-vm_ary_push(mrb_value recv, mrb_value value)
+ENTRY_mrb(vm_ary_push, void, 2, mrb_value recv, mrb_value value)
 {
-  PROLOGUE_mrb;
   /* A B            R(A).push(R(B)) */
   mrb_ary_push(mrb, recv, value);
 }
 
-static void
-vm_ary_store(mrb_value recv, uint32_t index, mrb_value value)
+ENTRY_mrb(vm_ary_store, void, 3, mrb_value recv, uint32_t index, mrb_value value)
 {
-  PROLOGUE_mrb;
   /* A B C          R(B)[C] := R(A) */
   mrb_ary_set(mrb, recv, index, value);
 }
 
-static mrb_value
-vm_blk_push(uint32_t bx)
+ENTRY_vme_regs(vm_blk_push, mrb_value, 1, uint32_t bx)
 {
-  PROLOGUE_regs_mrb;
   /* A Bx   R(A) := block (16=6:1:5:4) */
+  mrb_state *mrb = vme->mrb;
   int m1 = (bx>>10)&0x3f;
   int r  = (bx>>9)&0x1;
   int m2 = (bx>>4)&0x1f;
   int lv = (bx>>0)&0xf;
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_BLKPUSH (0x%x:0x%x:0x%x:0x%x)\n", m1, r, m2, lv);
   mrb_value *stack;
 
   if (lv == 0) stack = regs + 1;
   else {
     struct REnv *e = mrb_vm_uvenv(mrb, lv-1);
     if (!e) {
-      /* localjump_error(mrb, LOCALJUMP_ERROR_YIELD);
-      goto L_RAISE; TODO */
-      while(1);
+      mrb_vm_localjump_error(mrb, LOCALJUMP_ERROR_YIELD);
+      vm_raise_exc(mrb);
     }
     stack = e->stack + 1;
   }
   return stack[m1+r+m2];
 }
 
-static mrb_value
-vm_blockexec(int a, uint32_t bx)
+ENTRY_vme_jmp(vm_blockexec, mrb_value, 2, int a, uint32_t bx)
 {
-  PROLOGUE_regs_mrb_vmc_ret;
   /* A Bx   R(A) := blockexec(R(A),SEQ[Bx]) */
+  mrb_state *mrb = vme->mrb;
+  mrb_vm_context *vmc = vme->ctx;
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_EXEC (a=0x%x, SEQ[0x%x])\n", a, bx);
   mrb_callinfo *ci;
-  mrb_value recv = regs[a];
+  mrb_value recv = jmp->regs[a];
   struct RProc *p;
 
   /* prepare stack */
   ci = mrb_vm_cipush(mrb);
-  ci->pc = ret;
+  ci->pc = jmp->pc;
   ci->acc = a;
   ci->mid = 0;
   ci->stackidx = mrb->c->stack - mrb->c->stbase;
@@ -265,9 +332,9 @@ vm_blockexec(int a, uint32_t bx)
     mrb_value result;
     result = p->body.func(mrb, recv);
     mrb_gc_arena_restore(mrb, vmc->ai);
-    /*if (mrb->exc) goto L_RAISE;*/;
+    if (mrb->exc) vm_raise_exc(mrb);
     /* pop stackpos */
-    regs = mrb->c->stack = mrb->c->stbase + mrb->c->ci->stackidx;
+    jmp->regs = mrb->c->stack = mrb->c->stbase + mrb->c->ci->stackidx;
     mrb_vm_cipop(mrb);
     return result;
   }
@@ -277,35 +344,113 @@ vm_blockexec(int a, uint32_t bx)
     vmc->syms = vmc->irep->syms;
     mrb_vm_stack_extend(mrb, vmc->irep->nregs, 1);
     ci->nregs = vmc->irep->nregs;
-    return mrb_vm_exec(mrb, vmc->irep->iseq);
+    jmp->regs = mrb->c->stack;
+    jmp->pc = vmc->irep->iseq;
+    return mrb_nil_value();
   }
 }
 
-static mrb_value
-vm_call(void)
+ENTRY_vme_jmp(vm_call, void, 1, int dummy)
 {
+  /* A      R(A) := self.call(frame.argc, frame.argv) */
+  mrb_state *mrb = vme->mrb;
+  mrb_vm_context *vmc = vme->ctx;
+  mrb_callinfo *ci;
+  mrb_value recv = mrb->c->stack[0];
+  struct RProc *m = mrb_proc_ptr(recv);
+
+  /* replace callinfo */
+  ci = mrb->c->ci;
+  ci->target_class = m->target_class;
+  ci->proc = m;
+  if (m->env) {
+    if (m->env->mid) {
+      ci->mid = m->env->mid;
+    }
+    if (!m->env->stack) {
+      m->env->stack = mrb->c->stack;
+    }
+  }
+
+  /* prepare stack */
+  if (MRB_PROC_CFUNC_P(m)) {
+    recv = m->body.func(mrb, recv);
+    mrb_gc_arena_restore(mrb, vmc->ai);
+    if (mrb->exc) vm_raise_exc(mrb);
+    /* pop stackpos */
+    ci = mrb->c->ci;
+    jmp->regs = mrb->c->stack = mrb->c->stbase + ci->stackidx;
+    jmp->regs[ci->acc] = recv;
+    jmp->pc = ci->pc;
+    mrb_vm_cipop(mrb);
+    vmc->irep = mrb->c->ci->proc->body.irep;
+    vmc->pool = vmc->irep->pool;
+    vmc->syms = vmc->irep->syms;
+  }
+  else {
+    /* setup environment for calling method */
+    vmc->proc = m;
+    vmc->irep = m->body.irep;
+    if (!vmc->irep) {
+      mrb->c->stack[0] = mrb_nil_value();
+      while(1);
+      // goto L_RETURN; TODO
+    }
+    vmc->pool = vmc->irep->pool;
+    vmc->syms = vmc->irep->syms;
+    ci->nregs = vmc->irep->nregs;
+    if (ci->argc < 0) {
+      mrb_vm_stack_extend(mrb, (vmc->irep->nregs < 3) ? 3 : vmc->irep->nregs, 3);
+    }
+    else {
+      mrb_vm_stack_extend(mrb, vmc->irep->nregs, ci->argc+2);
+    }
+    jmp->regs = mrb->c->stack;
+    jmp->regs[0] = m->env->stack[0];
+    jmp->pc = vmc->irep->iseq;
+  }
 }
 
-static void
-vm_ensure_pop(uint32_t times)
+ENTRY_vme(vm_ensure_pop, void, 1, uint32_t times)
 {
+  /* A      A.times{ensure_pop().call} */
+  mrb_state *mrb = vme->mrb;
+  int n;
+
+  for (n=0; n<times; n++) {
+    mrb_vm_ecall(mrb, --mrb->c->ci->eidx);
+  }
+  mrb_gc_arena_restore(mrb, vme->ctx->ai);
 }
 
-static void
-vm_ensure_push(uint32_t bx)
+ENTRY_vme(vm_ensure_push, void, 1, uint32_t bx)
 {
+  /* Bx     ensure_push(SEQ[Bx]) */
+  mrb_state *mrb = vme->mrb;
+  struct RProc *p;
+
+  p = mrb_closure_new(mrb, mrb->irep[vme->ctx->irep->idx+bx]);
+  /* push ensure_stack */
+  if (mrb->c->esize <= mrb->c->ci->eidx) {
+    if (mrb->c->esize == 0) mrb->c->esize = 16;
+    else mrb->c->esize *= 2;
+    mrb->c->ensure = (struct RProc **)mrb_realloc(mrb, mrb->c->ensure, sizeof(struct RProc*) * mrb->c->esize);
+  }
+  mrb->c->ensure[mrb->c->ci->eidx++] = p;
+  mrb_gc_arena_restore(mrb, vme->ctx->ai);
 }
 
-static int32_t
-vm_enter(uint32_t ax)
+ENTRY_vme_regs(vm_enter, int32_t, 1, uint32_t ax)
 {
-  PROLOGUE_regs_mrb;
   /* Ax             arg setup according to flags (24=5:5:1:5:5:1:1) */
   /* number of optional arguments times OP_JMP should follow */
+  mrb_state *mrb = vme->mrb;
   int m1 = (ax>>18)&0x1f;
   int o  = (ax>>13)&0x1f;
   int r  = (ax>>12)&0x1;
   int m2 = (ax>>7)&0x1f;
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_ENTER (0x%x:0x%x:0x%x:0x%x:x:x:x)\n", m1, o, r, m2);
   /* unused
      int k  = (ax>>2)&0x1f;
      int kd = (ax>>1)&0x1;
@@ -326,10 +471,8 @@ vm_enter(uint32_t ax)
   if (mrb->c->ci->proc && MRB_PROC_STRICT_P(mrb->c->ci->proc)) {
     if (argc >= 0) {
       if (argc < m1 + m2 || (r == 0 && argc > len)) {
-        /* TODO
-        argnum_error(mrb, m1+m2);
-        goto L_RAISE;*/
-        while(1);
+        mrb_vm_argnum_error(mrb, m1+m2);
+        vm_raise_exc(mrb);
       }
     }
   }
@@ -377,74 +520,110 @@ vm_enter(uint32_t ax)
   }
 }
 
-static mrb_value
-vm_getglobal(mrb_sym sym)
+ENTRY_mrb(vm_getglobal, mrb_value, 1, mrb_sym sym)
 {
+  /* A B    R(A) := getglobal(Sym(B)) */
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_GETGLOBAL (sym=:%s)\n", mrb_sym2name(mrb, sym));
+  return mrb_gv_get(mrb, sym);
 }
 
-static void
-vm_setglobal(mrb_sym sym, mrb_value value)
+ENTRY_mrb(vm_setglobal, void, 2, mrb_sym sym, mrb_value value)
 {
+  /* setglobal(Sym(b), R(A)) */
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_SETGLOBAL (sym=:%s, value=0x%x)\n", mrb_sym2name(mrb, sym), value.w);
+  mrb_gv_set(mrb, sym, value);
 }
 
-static mrb_value
-vm_ivget(mrb_sym sym)
+ENTRY_mrb(vm_ivget, mrb_value, 1, mrb_sym sym)
 {
+  /* A Bx   R(A) := ivget(Bx) */
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_GETIV (sym=:%s)\n", mrb_sym2name(mrb, sym));
+  return mrb_vm_iv_get(mrb, sym);
 }
 
-static void
-vm_ivset(mrb_sym sym, mrb_value value)
+ENTRY_mrb(vm_ivset, void, 2, mrb_sym sym, mrb_value value)
 {
+  /* ivset(Sym(B),R(A)) */
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_SETIV (sym=:%s, value=0x%x)\n", mrb_sym2name(mrb, sym), value.w);
+  mrb_vm_iv_set(mrb, sym, value);
 }
 
-static mrb_value
-vm_cvget(mrb_sym sym)
+ENTRY_mrb(vm_cvget, mrb_value, 1, mrb_sym sym)
 {
+  /* A B    R(A) := cvget(Sym(B)) */
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_GETcV (sym=:%s)\n", mrb_sym2name(mrb, sym));
+  return mrb_vm_cv_get(mrb, sym);
 }
 
-static void
-vm_cvset(mrb_sym sym, mrb_value value)
+ENTRY_mrb(vm_cvset, void, 2, mrb_sym sym, mrb_value value)
 {
+  /* ivset(Sym(B),R(A)) */
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_SETCV (sym=:%s, value=0x%x)\n", mrb_sym2name(mrb, sym), value.w);
+  mrb_vm_cv_set(mrb, sym, value);
 }
 
-static mrb_value
-vm_constget(mrb_sym sym)
+ENTRY_mrb(vm_constget, mrb_value, 1, mrb_sym sym)
 {
+  /* A B    R(A) := constget(Sym(B)) */
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_GETCONST (sym=:%s)\n", mrb_sym2name(mrb, sym));
+  return mrb_vm_const_get(mrb, sym);
 }
 
-static void
-vm_constset(mrb_sym sym, mrb_value value)
+ENTRY_mrb(vm_constset, void, 2, mrb_sym sym, mrb_value value)
 {
+  /* A B    constset(Sym(B),R(A)) */
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_SETCONST (sym=:%s, value=0x%x)\n", mrb_sym2name(mrb, sym), value.w);
+  mrb_vm_const_set(mrb, sym, value);
 }
 
-static mrb_value
-vm_getmcnst(mrb_value recv, mrb_sym sym)
+ENTRY_mrb(vm_getmcnst, mrb_value, 2, mrb_value recv, mrb_sym sym)
 {
-  PROLOGUE_mrb;
   /* A B C  R(A) := R(C)::Sym(B) */
   return mrb_const_get(mrb, recv, sym);
 }
 
-static void
-vm_setmcnst(mrb_value recv, mrb_sym sym, mrb_value value)
+ENTRY_mrb(vm_setmcnst, void, 3, mrb_value recv, mrb_sym sym, mrb_value value)
 {
+  /* A B C  R(A+1)::Sym(B) := R(A) */
+  mrb_const_set(mrb, recv, sym, value);
 }
 
-static mrb_value
-vm_getupvar(uint32_t b, uint32_t c)
+ENTRY_mrb(vm_getupvar, mrb_value, 2, uint32_t idx, uint32_t up)
 {
+  /* A B C  R(A) := uvget(B,C) */
+  struct REnv *e = mrb_vm_uvenv(mrb, up);
+
+  if (!e) {
+    return mrb_nil_value();
+  }
+  else {
+    return e->stack[idx];
+  }
 }
 
-static void
-vm_setupvar(uint32_t b, uint32_t c, mrb_value value)
+ENTRY_mrb(vm_setupvar, void, 3, uint32_t idx, uint32_t up, mrb_value value)
 {
+  /* A B C  uvset(B,C,R(A)) */
+  struct REnv *e = mrb_vm_uvenv(mrb, up);
+
+  if (e) {
+    e->stack[idx] = value;
+    mrb_write_barrier(mrb, (struct RBasic*)e);
+  }
 }
 
-static mrb_value
-vm_hash_new(mrb_value *array, uint32_t pairs)
+ENTRY_vme(vm_hash_new, mrb_value, 2, mrb_value *array, uint32_t pairs)
 {
-  PROLOGUE_mrb_vmc;
   /* A B C   R(A) := hash_new(R(B),R(B+1)..R(B+C)) */
+  mrb_state *mrb = vme->mrb;
   int i = 0;
   mrb_value hash = mrb_hash_new_capa(mrb, pairs);
 
@@ -452,15 +631,17 @@ vm_hash_new(mrb_value *array, uint32_t pairs)
     mrb_hash_set(mrb, hash, array[i], array[i+1]);
     i+=2;
   }
-  mrb_gc_arena_restore(mrb, vmc->ai);
+  mrb_gc_arena_restore(mrb, vme->ctx->ai);
   return hash;
 }
 
-static mrb_value
-vm_lambda(uint32_t bz, uint32_t cm)
+ENTRY_vme(vm_lambda, mrb_value, 2, uint32_t bz, uint32_t cm)
 {
-  PROLOGUE_mrb_vmc;
   /* A b c  R(A) := lambda(SEQ[b],c) (b:c = 14:2) */
+  mrb_state *mrb = vme->mrb;
+  mrb_vm_context *vmc = vme->ctx;
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_LAMBDA (SEQ[0x%x], cm=0x%x)\n", bz, cm);
   mrb_value proc;
   struct RProc *p;
 
@@ -476,11 +657,12 @@ vm_lambda(uint32_t bz, uint32_t cm)
   return proc;
 }
 
-static mrb_value
-vm_newclass(mrb_value base, mrb_sym sym, mrb_value super)
+ENTRY_vme(vm_newclass, mrb_value, 3, mrb_value base, mrb_sym sym, mrb_value super)
 {
-  PROLOGUE_mrb_vmc;
   /* A B    R(A) := newclass(R(A),Sym(B),R(A+1)) */
+  mrb_state *mrb = vme->mrb;
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_CLASS (sym=:%s, base=0x%x)\n", mrb_sym2name(mrb, sym), base.w);
   mrb_value cls;
   struct RClass *c = 0;
 
@@ -489,26 +671,28 @@ vm_newclass(mrb_value base, mrb_sym sym, mrb_value super)
   }
   c = mrb_vm_define_class(mrb, base, super, sym);
   cls = mrb_obj_value(c);
-  mrb_gc_arena_restore(mrb, vmc->ai);
+  mrb_gc_arena_restore(mrb, vme->ctx->ai);
   return cls;
 }
 
-static void
-vm_newmethod(mrb_value base, mrb_sym sym, mrb_value closure)
+ENTRY_vme(vm_newmethod, void, 3, mrb_value base, mrb_sym sym, mrb_value closure)
 {
-  PROLOGUE_mrb_vmc;
   /* A B            R(A).newmethod(Sym(B),R(A+1)) */
+  mrb_state *mrb = vme->mrb;
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_METHOD (sym=:%s, base=0x%x)\n", mrb_sym2name(mrb, sym), base.w);
   struct RClass *c = mrb_class_ptr(base);
 
   mrb_define_method_vm(mrb, c, sym, closure);
-  mrb_gc_arena_restore(mrb, vmc->ai);
+  mrb_gc_arena_restore(mrb, vme->ctx->ai);
 }
 
-static mrb_value
-vm_newmodule(mrb_value base, mrb_sym sym)
+ENTRY_vme(vm_newmodule, mrb_value, 2, mrb_value base, mrb_sym sym)
 {
-  PROLOGUE_mrb_vmc;
   /* A B            R(A) := newmodule(R(A),Sym(B)) */
+  mrb_state *mrb = vme->mrb;
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_MODULE (sym=:%s, base=0x%x)\n", mrb_sym2name(mrb, sym), base.w);
   struct RClass *c = 0;
   mrb_value cls;
 
@@ -517,50 +701,67 @@ vm_newmodule(mrb_value base, mrb_sym sym)
   }
   c = mrb_vm_define_module(mrb, base, sym);
   cls = mrb_obj_value(c);
-  mrb_gc_arena_restore(mrb, vmc->ai);
+  mrb_gc_arena_restore(mrb, vme->ctx->ai);
   return cls;
 }
 
-static void
-vm_raise(mrb_value obj)
+ENTRY_mrb(vm_raise, void, 1, mrb_value obj)
 {
+  while(1);
 }
 
-static mrb_value
-vm_range_new(mrb_value first, mrb_value second, uint32_t exclude)
+static void
+vm_raise_exc(mrb_state *mrb)
 {
-  PROLOGUE_mrb_vmc;
+  while(1);
+}
+
+ENTRY_vme(vm_range_new, mrb_value, 3, mrb_value first, mrb_value second, uint32_t exclude)
+{
   /* A B C  R(A) := range_new(R(B),R(B+1),C) */
+  mrb_state *mrb = vme->mrb;
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_RANGE (0x%x..%s0x%x)\n",
+    mrb_obj_ptr(first), exclude ? "." : "", mrb_obj_ptr(second));
   mrb_value range = mrb_range_new(mrb, first, second, exclude);
-  mrb_gc_arena_restore(mrb, vmc->ai);
+  mrb_gc_arena_restore(mrb, vme->ctx->ai);
   return range;
 }
 
-static mrb_value
-vm_rescue(void)
+ENTRY_mrb(vm_rescue, mrb_value, 1, int dummy)
 {
+  /* A      R(A) := exc; clear(exc) */
+  return mrb_obj_value(mrb->exc);
 }
 
-static void
-vm_rescue_pop(uint32_t times)
+ENTRY_mrb(vm_rescue_pop, void, 1, uint32_t times)
 {
-}
-
-static void
-vm_rescue_push(mrb_code *base, int32_t offset)
-{
-}
-
-static void *
-vm_ret(mrb_value v, int b)
-{
-  PROLOGUE_regs_mrb_vmc;
-  /* A      return R(A) */
-  mrb_code *pc;
-  if (mrb->exc) {
-    /* TODO: */
-    while(1);
+  /* A       A.times{rescue_pop()} */
+  while (times--) {
+    mrb->c->ci->ridx--;
   }
+}
+
+ENTRY_vme_jmp(vm_rescue_push, void, 1, int32_t offset)
+{
+  /* sBx    pc+=sBx on exception */
+  mrb_state *mrb = vme->mrb;
+  if (mrb->c->rsize <= mrb->c->ci->ridx) {
+    if (mrb->c->rsize == 0) mrb->c->rsize = 16;
+    else mrb->c->rsize *= 2;
+    mrb->c->rescue = (mrb_code **)mrb_realloc(mrb, mrb->c->rescue, sizeof(mrb_code*) * mrb->c->rsize);
+  }
+  mrb->c->rescue[mrb->c->ci->ridx++] = jmp->pc + offset;
+}
+
+ENTRY_vme_jmp(vm_ret, mrb_value, 2, mrb_value v, int b)
+{
+  /* A      return R(A) */
+  mrb_state *mrb = vme->mrb;
+  mrb_vm_context *vmc = vme->ctx;
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_RETURN (b=%x)\n", b);
+  if (mrb->exc) vm_raise_exc(mrb);
   else {
     mrb_callinfo *ci = mrb->c->ci;
     int acc, eidx = mrb->c->ci->eidx;
@@ -572,15 +773,13 @@ vm_ret(mrb_value v, int b)
           struct REnv *e = mrb_vm_top_env(mrb, proc);
 
           if (e->cioff < 0) {
-            /*TODO:localjump_error(mrb, LOCALJUMP_ERROR_RETURN);
-            goto L_RAISE;*/
-            while(1);
+            mrb_vm_localjump_error(mrb, LOCALJUMP_ERROR_RETURN);
+            vm_raise_exc(mrb);
           }
           ci = mrb->c->cibase + e->cioff;
           if (ci == mrb->c->cibase) {
-            /*TODO:localjump_error(mrb, LOCALJUMP_ERROR_RETURN);
-            goto L_RAISE;*/
-            while(1);
+            mrb_vm_localjump_error(mrb, LOCALJUMP_ERROR_RETURN);
+            vm_raise_exc(mrb);
           }
           mrb->c->ci = ci;
           break;
@@ -588,15 +787,13 @@ vm_ret(mrb_value v, int b)
       case OP_R_NORMAL:
         if (ci == mrb->c->cibase) {
           if (!mrb->c->prev) { /* toplevel return */
-            /*TODO:localjump_error(mrb, LOCALJUMP_ERROR_RETURN);
-            goto L_RAISE;*/
-            while(1);
+            mrb_vm_localjump_error(mrb, LOCALJUMP_ERROR_RETURN);
+            vm_raise_exc(mrb);
           }
           if (mrb->c->prev->ci == mrb->c->prev->cibase) {
-            /*TODO:mrb_value exc = mrb_exc_new3(mrb, E_RUNTIME_ERROR, mrb_str_new(mrb, "double resume", 13));
+            mrb_value exc = mrb_exc_new3(mrb, E_RUNTIME_ERROR, mrb_str_new(mrb, "double resume", 13));
             mrb->exc = mrb_obj_ptr(exc);
-            goto L_RAISE;*/
-            while(1);
+            vm_raise_exc(mrb);
           }
           /* automatic yield at the end */
           mrb->c->status = MRB_FIBER_TERMINATED;
@@ -606,9 +803,8 @@ vm_ret(mrb_value v, int b)
         break;
       case OP_R_BREAK:
         if (proc->env->cioff < 0) {
-          /*TODO:localjump_error(mrb, LOCALJUMP_ERROR_BREAK);
-          goto L_RAISE;*/
-          while(1);
+          mrb_vm_localjump_error(mrb, LOCALJUMP_ERROR_BREAK);
+          vm_raise_exc(mrb);
         }
         ci = mrb->c->ci = mrb->c->cibase + proc->env->cioff + 1;
         break;
@@ -616,17 +812,17 @@ vm_ret(mrb_value v, int b)
         /* cannot happen */
         break;
     }
-    ci = mrb->c->ci = mrb->c->cibase + proc->env->cioff + 1;
     while (eidx > mrb->c->ci[-1].eidx) {
       mrb_vm_ecall(mrb, --eidx);
     }
     mrb_vm_cipop(mrb);
     acc = ci->acc;
-    pc = ci->pc;
-    regs = mrb->c->stack = mrb->c->stbase + ci->stackidx;
+    jmp->pc = ci->pc;
+    jmp->regs = mrb->c->stack = mrb->c->stbase + ci->stackidx;
     if (acc < 0) {
       mrb->jmp = vmc->prev_jmp;
-      return mrb_obj_ptr(v);
+      jmp->pc = (mrb_code *)vm_epilogue;
+      return v;
     }
     // DEBUG(printf("from :%s\n", mrb_sym2name(mrb, ci->mid)));
     vmc->proc = mrb->c->ci->proc;
@@ -634,131 +830,383 @@ vm_ret(mrb_value v, int b)
     vmc->pool = vmc->irep->pool;
     vmc->syms = vmc->irep->syms;
 
-    regs[acc] = v;
+    jmp->regs[acc] = v;
   }
-  return pc;
+  return mrb_nil_value();
 }
 
-static mrb_value
-vm_send_array(mrb_value *argv, mrb_sym sym)
+ENTRY_vme_jmp(vm_send_array, void, 2, int a, mrb_sym mid)
 {
+  /* A B C  R(A) := call(R(A),Sym(B),R(A+1),... ,R(A+C-1)) */
+  mrb_state *mrb = vme->mrb;
+  mrb_vm_context *vmc = vme->ctx;
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_SEND (a=0x%x, n=*, mid=:%s)\n", a, mrb_sym2name(mrb, mid));
+  struct RProc *m;
+  struct RClass *c;
+  mrb_callinfo *ci;
+  mrb_value recv, result;
+
+  recv = jmp->regs[a];
+  c = mrb_class(mrb, recv);
+  m = mrb_method_search_vm(mrb, &c, mid);
+  if (!m) {
+    mrb_value sym = mrb_symbol_value(mid);
+
+    mid = mrb_intern2(mrb, "method_missing", 14);
+    m = mrb_method_search_vm(mrb, &c, mid);
+    mrb_ary_unshift(mrb, jmp->regs[a+1], sym);
+  }
+
+  /* push callinfo */
+  ci = mrb_vm_cipush(mrb);
+  ci->mid = mid;
+  ci->proc = m;
+  ci->stackidx = mrb->c->stack - mrb->c->stbase;
+  ci->argc = -1;
+  if (c->tt == MRB_TT_ICLASS) {
+    ci->target_class = c->c;
+  }
+  else {
+    ci->target_class = c;
+  }
+
+  ci->pc = jmp->pc;
+  ci->acc = a;
+
+  /* prepare stack */
+  mrb->c->stack += a;
+
+  if (MRB_PROC_CFUNC_P(m)) {
+    ci->nregs = 3;
+    result = m->body.func(mrb, recv);
+    mrb->c->stack[0] = result;
+    mrb_gc_arena_restore(mrb, vmc->ai);
+    if (mrb->exc) vm_raise_exc(mrb);
+    /* pop stackpos */
+    ci = mrb->c->ci;
+    if (!ci->target_class) { /* return from context modifying method (resume/yield) */
+      if (!MRB_PROC_CFUNC_P(ci[-1].proc)) {
+        vmc->irep = ci[-1].proc->body.irep;
+        vmc->pool = vmc->irep->pool;
+        vmc->syms = vmc->irep->syms;
+      }
+    }
+    jmp->regs = mrb->c->stack = mrb->c->stbase + ci->stackidx;
+    jmp->pc = ci->pc;
+    mrb_vm_cipop(mrb);
+  }
+  else {
+    /* setup environment for calling method */
+    vmc->proc = mrb->c->ci->proc = m;
+    vmc->irep = m->body.irep;
+    vmc->pool = vmc->irep->pool;
+    vmc->syms = vmc->irep->syms;
+    ci->nregs = vmc->irep->nregs;
+    mrb_vm_stack_extend(mrb, (vmc->irep->nregs < 3) ? 3 : vmc->irep->nregs, 3);
+    jmp->regs = mrb->c->stack;
+    jmp->pc = vmc->irep->iseq;
+  }
 }
 
-static mrb_value
-vm_send_normal(mrb_value *argv, mrb_sym sym, uint32_t argc)
+ENTRY_vme_jmp(vm_send_normal, void, 2, uint32_t n_a, mrb_sym mid)
 {
+  /* A B C  R(A) := call(R(A),Sym(B),R(A+1),..2 ,R(A+C-1)) */
+  mrb_state *mrb = vme->mrb;
+  mrb_vm_context *vmc = vme->ctx;
+  int a = n_a & ((1 << 9) - 1);
+  int n = (n_a >> 9);
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_SEND (a=0x%x, n=0x%x, mid=:%s)\n", a, n, mrb_sym2name(mrb, mid));
+  struct RProc *m;
+  struct RClass *c;
+  mrb_callinfo *ci;
+  mrb_value recv, result;
+
+  recv = jmp->regs[a];
+  c = mrb_class(mrb, recv);
+  m = mrb_method_search_vm(mrb, &c, mid);
+  if (!m) {
+    mrb_value sym = mrb_symbol_value(mid);
+
+    mid = mrb_intern2(mrb, "method_missing", 14);
+    m = mrb_method_search_vm(mrb, &c, mid);
+    value_move(jmp->regs+a+2, jmp->regs+a+1, ++n);
+    jmp->regs[a+1] = sym;
+  }
+
+  /* push callinfo */
+  ci = mrb_vm_cipush(mrb);
+  ci->mid = mid;
+  ci->proc = m;
+  ci->stackidx = mrb->c->stack - mrb->c->stbase;
+  ci->argc = n;
+  if (c->tt == MRB_TT_ICLASS) {
+    ci->target_class = c->c;
+  }
+  else {
+    ci->target_class = c;
+  }
+
+  ci->pc = jmp->pc;
+  ci->acc = a;
+
+  /* prepare stack */
+  mrb->c->stack += a;
+
+  if (MRB_PROC_CFUNC_P(m)) {
+    ci->nregs = n + 2;
+    result = m->body.func(mrb, recv);
+    mrb->c->stack[0] = result;
+    mrb_gc_arena_restore(mrb, vmc->ai);
+    if (mrb->exc) vm_raise_exc(mrb);
+    /* pop stackpos */
+    ci = mrb->c->ci;
+    if (!ci->target_class) { /* return from context modifying method (resume/yield) */
+      if (!MRB_PROC_CFUNC_P(ci[-1].proc)) {
+        vmc->irep = ci[-1].proc->body.irep;
+        vmc->pool = vmc->irep->pool;
+        vmc->syms = vmc->irep->syms;
+      }
+    }
+    jmp->regs = mrb->c->stack = mrb->c->stbase + ci->stackidx;
+    jmp->pc = ci->pc;
+    mrb_vm_cipop(mrb);
+  }
+  else {
+    /* setup environment for calling method */
+    vmc->proc = mrb->c->ci->proc = m;
+    vmc->irep = m->body.irep;
+    vmc->pool = vmc->irep->pool;
+    vmc->syms = vmc->irep->syms;
+    ci->nregs = vmc->irep->nregs;
+    mrb_vm_stack_extend(mrb, vmc->irep->nregs,  ci->argc+2);
+    jmp->regs = mrb->c->stack;
+    jmp->pc = vmc->irep->iseq;
+  }
 }
 
-static mrb_value
-vm_singleton_class(mrb_value base)
+ENTRY_vme(vm_singleton_class, mrb_value, 1, mrb_value base)
 {
-  PROLOGUE_mrb_vmc;
   /* A B    R(A) := R(B).singleton_class */
+  mrb_state *mrb = vme->mrb;
   mrb_value cls;
   cls = mrb_singleton_class(mrb, base);
-  mrb_gc_arena_restore(mrb, vmc->ai);
+  mrb_gc_arena_restore(mrb, vme->ctx->ai);
   return cls;
 }
 
-static void
-vm_str_cat(mrb_value recv, mrb_value other)
+ENTRY_mrb(vm_str_cat, void, 2, mrb_value recv, mrb_value other)
 {
-  PROLOGUE_mrb;
   /* A B    R(A).concat(R(B)) */
   mrb_str_concat(mrb, recv, other);
 }
 
-static mrb_value
-vm_str_dup(mrb_value lit)
+ENTRY_vme(vm_str_dup, mrb_value, 1, mrb_value lit)
 {
-  PROLOGUE_mrb_vmc;
   /* A Bx           R(A) := str_new(Lit(Bx)) */
+  mrb_state *mrb = vme->mrb;
   mrb_value str = mrb_str_literal(mrb, lit);
-  mrb_gc_arena_restore(mrb, vmc->ai);
+  mrb_gc_arena_restore(mrb, vme->ctx->ai);
   return str;
 }
 
-static mrb_value
-vm_super(mrb_value *argv2, uint32_t argc)
+ENTRY_vme_jmp(vm_super_array, void, 1, uint32_t a)
 {
+  /* A B C  R(A) := super(R(A+1),... ,R(A+C-1)) */
+  mrb_state *mrb = vme->mrb;
+  mrb_vm_context *vmc = vme->ctx;
+  mrb_value recv;
+  mrb_callinfo *ci = mrb->c->ci;
+  struct RProc *m;
+  struct RClass *c;
+  mrb_sym mid = ci->mid;
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_SUPER (a=0x%x, n=*, (mid=:%s))\n", a, mrb_sym2name(mrb, mid));
+
+  recv = jmp->regs[0];
+  c = mrb->c->ci->target_class->super;
+  m = mrb_method_search_vm(mrb, &c, mid);
+  if (!m) {
+    mid = mrb_intern2(mrb, "method_missing", 14);
+    m = mrb_method_search_vm(mrb, &c, mid);
+    mrb_ary_unshift(mrb, jmp->regs[a+1], mrb_symbol_value(ci->mid));
+  }
+
+  /* push callinfo */
+  ci = mrb_vm_cipush(mrb);
+  ci->mid = mid;
+  ci->proc = m;
+  ci->stackidx = mrb->c->stack - mrb->c->stbase;
+  ci->argc = -1;
+  ci->target_class = m->target_class;
+  ci->pc = jmp->pc;
+
+  /* prepare stack */
+  mrb->c->stack += a;
+  mrb->c->stack[0] = recv;
+
+  if (MRB_PROC_CFUNC_P(m)) {
+    mrb->c->stack[0] = m->body.func(mrb, recv);
+    mrb_gc_arena_restore(mrb, vmc->ai);
+    if (mrb->exc) vm_raise_exc(mrb);
+    /* pop stackpos */
+    jmp->regs = mrb->c->stack = mrb->c->stbase + mrb->c->ci->stackidx;
+    mrb_vm_cipop(mrb);
+  }
+  else {
+    /* fill callinfo */
+    ci->acc = a;
+
+    /* setup environment for calling method */
+    ci->proc = m;
+    vmc->irep = m->body.irep;
+    vmc->pool = vmc->irep->pool;
+    vmc->syms = vmc->irep->syms;
+    ci->nregs = vmc->irep->nregs;
+    mrb_vm_stack_extend(mrb, (vmc->irep->nregs < 3) ? 3 : vmc->irep->nregs, 3);
+    jmp->regs = mrb->c->stack;
+    jmp->pc = vmc->irep->iseq;
+  }
 }
 
-static mrb_value
-vm_target_class(void)
+ENTRY_vme_jmp(vm_super_normal, void, 1, uint32_t n_a)
 {
-  PROLOGUE_mrb;
+  /* A B C  R(A) := super(R(A+1),... ,R(A+C-1)) */
+  mrb_state *mrb = vme->mrb;
+  mrb_vm_context *vmc = vme->ctx;
+  mrb_value recv;
+  mrb_callinfo *ci = mrb->c->ci;
+  struct RProc *m;
+  struct RClass *c;
+  mrb_sym mid = ci->mid;
+  int a = n_a & ((1 << 9) - 1);
+  int n = (n_a >> 9);
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_SUPER (a=0x%x, n=0x%x, (mid=:%s))\n", a, n, mrb_sym2name(mrb, mid));
+
+  recv = jmp->regs[0];
+  c = mrb->c->ci->target_class->super;
+  m = mrb_method_search_vm(mrb, &c, mid);
+  if (!m) {
+    mid = mrb_intern2(mrb, "method_missing", 14);
+    m = mrb_method_search_vm(mrb, &c, mid);
+    value_move(jmp->regs+a+2, jmp->regs+a+1, ++n);
+    jmp->regs[a+1] = mrb_symbol_value(ci->mid);
+  }
+
+  /* push callinfo */
+  ci = mrb_vm_cipush(mrb);
+  ci->mid = mid;
+  ci->proc = m;
+  ci->stackidx = mrb->c->stack - mrb->c->stbase;
+  ci->argc = n;
+  ci->target_class = m->target_class;
+  ci->pc = jmp->pc;
+
+  /* prepare stack */
+  mrb->c->stack += a;
+  mrb->c->stack[0] = recv;
+
+  if (MRB_PROC_CFUNC_P(m)) {
+    mrb->c->stack[0] = m->body.func(mrb, recv);
+    mrb_gc_arena_restore(mrb, vmc->ai);
+    if (mrb->exc) vm_raise_exc(mrb);
+    /* pop stackpos */
+    jmp->regs = mrb->c->stack = mrb->c->stbase + mrb->c->ci->stackidx;
+    mrb_vm_cipop(mrb);
+  }
+  else {
+    /* fill callinfo */
+    ci->acc = a;
+
+    /* setup environment for calling method */
+    ci->proc = m;
+    vmc->irep = m->body.irep;
+    vmc->pool = vmc->irep->pool;
+    vmc->syms = vmc->irep->syms;
+    ci->nregs = vmc->irep->nregs;
+    mrb_vm_stack_extend(mrb, vmc->irep->nregs, ci->argc+2);
+    jmp->regs = mrb->c->stack;
+    jmp->pc = vmc->irep->iseq;
+  }
+}
+
+ENTRY_mrb(vm_target_class, mrb_value, 1, int dummy)
+{
   /* A B    R(A) := target_class */
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_TCLASS\n");
   if (!mrb->c->ci->target_class) {
-    /* TODO */
-    // static const char msg[] = "no target class or module";
-    // mrb_value exc = mrb_exc_new(mrb, E_TYPE_ERROR, msg, sizeof(msg) - 1);
-    // mrb->exc = mrb_obj_ptr(exc);
-    // goto L_RAISE;
-    while(1);
+    static const char msg[] = "no target class or module";
+    mrb_value exc = mrb_exc_new(mrb, E_TYPE_ERROR, msg, sizeof(msg) - 1);
+    mrb->exc = mrb_obj_ptr(exc);
+    vm_raise_exc(mrb);
   }
   return mrb_obj_value(mrb->c->ci->target_class);
 }
 
-static void
-vm_stop_vm(void)
+ENTRY_mrb(vm_stop_vm, void, 1, int dummy)
 {
 }
 
-static void
-vm_raise_err(mrb_value obj)
+ENTRY_mrb(vm_raise_err, void, 1, mrb_value obj)
 {
 }
 
 static const mrb_vm_env env_initializer = {
-  .argary          = vm_argary,
-  .ary_cat         = vm_ary_cat,
-  .ary_fetch       = vm_ary_fetch,
-  .ary_new         = vm_ary_new,
-  .ary_post        = vm_ary_post,
-  .ary_push        = vm_ary_push,
-  .ary_store       = vm_ary_store,
-  .blk_push        = vm_blk_push,
-  .blockexec       = vm_blockexec,
-  .call            = vm_call,
-  .ensure_pop      = vm_ensure_pop,
-  .ensure_push     = vm_ensure_push,
-  .enter           = vm_enter,
-  .getglobal       = vm_getglobal,
-  .setglobal       = vm_setglobal,
-  .ivget           = vm_ivget,
-  .ivset           = vm_ivset,
-  .cvget           = vm_cvget,
-  .cvset           = vm_cvset,
-  .constget        = vm_constget,
-  .constset        = vm_constset,
-  .getmcnst        = vm_getmcnst,
-  .setmcnst        = vm_setmcnst,
-  .getupvar        = vm_getupvar,
-  .setupvar        = vm_setupvar,
-  .hash_new        = vm_hash_new,
-  .lambda          = vm_lambda,
-  .newclass        = vm_newclass,
-  .newmethod       = vm_newmethod,
-  .newmodule       = vm_newmodule,
-  .raise           = vm_raise,
-  .range_new       = vm_range_new,
-  .rescue          = vm_rescue,
-  .rescue_pop      = vm_rescue_pop,
-  .rescue_push     = vm_rescue_push,
-  .ret             = vm_ret,
-  // .ret_break       = vm_ret_break,
-  // .ret_normal      = vm_ret_normal,
-  // .ret_return      = vm_ret_return,
-  .send_array      = vm_send_array,
-  .send_normal     = vm_send_normal,
-  .singleton_class = vm_singleton_class,
-  .str_cat         = vm_str_cat,
-  .str_dup         = vm_str_dup,
-  .super           = vm_super,
-  .target_class    = vm_target_class,
-  .stop_vm         = vm_stop_vm,
-  .raise_err       = vm_raise_err,
+  .argary          = vm_argary_entry,
+  .ary_cat         = vm_ary_cat_entry,
+  .ary_fetch       = vm_ary_fetch_entry,
+  .ary_new         = vm_ary_new_entry,
+  .ary_post        = vm_ary_post_entry,
+  .ary_push        = vm_ary_push_entry,
+  .ary_store       = vm_ary_store_entry,
+  .blk_push        = vm_blk_push_entry,
+  .blockexec       = vm_blockexec_entry,
+  .call            = vm_call_entry,
+  .ensure_pop      = vm_ensure_pop_entry,
+  .ensure_push     = vm_ensure_push_entry,
+  .enter           = vm_enter_entry,
+  .getglobal       = vm_getglobal_entry,
+  .setglobal       = vm_setglobal_entry,
+  .ivget           = vm_ivget_entry,
+  .ivset           = vm_ivset_entry,
+  .cvget           = vm_cvget_entry,
+  .cvset           = vm_cvset_entry,
+  .constget        = vm_constget_entry,
+  .constset        = vm_constset_entry,
+  .getmcnst        = vm_getmcnst_entry,
+  .setmcnst        = vm_setmcnst_entry,
+  .getupvar        = vm_getupvar_entry,
+  .setupvar        = vm_setupvar_entry,
+  .hash_new        = vm_hash_new_entry,
+  .lambda          = vm_lambda_entry,
+  .newclass        = vm_newclass_entry,
+  .newmethod       = vm_newmethod_entry,
+  .newmodule       = vm_newmodule_entry,
+  .raise           = vm_raise_entry,
+  .range_new       = vm_range_new_entry,
+  .rescue          = vm_rescue_entry,
+  .rescue_pop      = vm_rescue_pop_entry,
+  .rescue_push     = vm_rescue_push_entry,
+  .ret             = vm_ret_entry,
+  // .ret_break       = vm_ret_break_entry,
+  // .ret_normal      = vm_ret_normal_entry,
+  // .ret_return      = vm_ret_return_entry,
+  .send_array      = vm_send_array_entry,
+  .send_normal     = vm_send_normal_entry,
+  .singleton_class = vm_singleton_class_entry,
+  .str_cat         = vm_str_cat_entry,
+  .str_dup         = vm_str_dup_entry,
+  .super_array     = vm_super_array_entry,
+  .super_normal    = vm_super_normal_entry,
+  .target_class    = vm_target_class_entry,
+  .stop_vm         = vm_stop_vm_entry,
+  .raise_err       = vm_raise_err_entry,
 };
+
+void (*nios2_dprintf)(const char *, ...);
 
 void
 mrb_vm_env_init(mrb_state *mrb)
@@ -769,6 +1217,7 @@ mrb_vm_env_init(mrb_state *mrb)
 
   vme->mrb = mrb;
   vme->object_class = mrb_obj_value(mrb->object_class);
+  vme->dprintf = nios2_dprintf;
 
   mrb->vm_env = vme;
 }
@@ -777,10 +1226,14 @@ mrb_value
 NAKED mrb_vm_exec(mrb_state *mrb, mrb_code *code)
 {
   asm("\t"
+  "addi sp, sp, -12\n\t"  /* Preserve stack area (4*3) */
+  "stw  ra, 8(sp)\n\t"    /* Save return address */
+  "stw  r%0, 4(sp)\n\t"   /* Save VMENV_REG */
+  "stw  r%1, 0(sp)\n\t"   /* Save STACK_REG */
   "ldw  r%0, %2(r4)\n\t"  /* VMENV_REG = mrb->vm_env; */
   "ldw  r%1, %3(r4)\n\t"  /* temp = mrb->c; */
   "ldw  r%1, %4(r%1)\n\t" /* STACK_REG = temp->stack; */
-  "jmp  r5\n"
+  "jmp  r5\n"             /* Jump to VM code */
   ::
   "i"(NIOS2_VMENV_REG), "i"(NIOS2_STACK_REG),
   "i"(offsetof(mrb_state, vm_env)),
@@ -789,6 +1242,20 @@ NAKED mrb_vm_exec(mrb_state *mrb, mrb_code *code)
   );
 
   return mrb_nil_value(); /* never reached */
+}
+
+static void
+NAKED vm_epilogue(void)
+{
+  asm("\t"
+  "ldw  r%1, 0(sp)\n\t"   /* Restore STACK_REG */
+  "ldw  r%0, 4(sp)\n\t"   /* Restore VMENV_REG */
+  "ldw  ra, 8(sp)\n\t"    /* Restore return address */
+  "addi sp, sp, 12\n\t"   /* Discard stack area (4*3) */
+  "ret\n"                 /* Return to caller (C-function) */
+  ::
+  "i"(NIOS2_VMENV_REG), "i"(NIOS2_STACK_REG)
+  );
 }
 
 #endif  /* MRB_MACHINE_NIOS2 */
