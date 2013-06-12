@@ -57,48 +57,50 @@ def dumpmrb(file)
       nirep,sirep = sdata.slice!(0, 4).unpack("n2")
       puts("    nirep: %d" % nirep)
       puts("    sirep: %d" % sirep)
-      recsz, = sdata.slice!(0, 4).unpack("N")
-      nlocals,nregs = sdata.slice!(0, 4).unpack("n2")
-      puts("    record_size: 0x%08x" % recsz)
-      puts("    # record_size does not match") if recsz != sdata.size
-      puts("    nlocals: %d" % nlocals)
-      puts("    nregs: %d" % nregs)
-      ilen, = sdata.slice!(0, 4).unpack("N")
-      puts("    ilen: %d" % ilen)
-      puts("    iseq: [")
-      i = ilen
-      n = 6
-      while(i > 0)
-        t = sdata.slice!(0, 4*[n,i].min).unpack("N*").map {|v| "0x%08x" % v}.join(", ")
-        i -= n
-        t += "," if i > 0
-        puts("      #{t}")
-      end
-      puts("    ]")
-      plen, = sdata.slice!(0, 4).unpack("N")
-      puts("    plen: %d" % plen)
-      puts("    pool:") if plen > 0
-      plen.times {|n|
-        tt,len = sdata.slice!(0, 3).unpack("Cn")
-        v = sdata.slice!(0, len)
-        puts("      - # %d" % n)
-        puts("        type: #{TT_NAMES[tt]}")
-        puts("        len: %d" % len)
-        puts("        str: #{v.inspect}")
-        sdata.slice!(0, 1)
-      }
-      slen, = sdata.slice!(0, 4).unpack("N")
-      puts("    slen: %d" % slen)
-      puts("    syms:") if slen > 0
-      slen.times {|n|
-        len, = sdata.slice!(0, 2).unpack("n")
-        if(len < 0xffff)
-          v = sdata.slice!(0, len)
-          puts("      - %-16s # %d" % [v.inspect, n])
-          sdata.slice!(0, 1)
-        else
-          puts("      # %-16s # %d" % ["(dummy)", n])
+      puts("    ireps:")
+      nirep.times {|r|
+        recsz, = sdata.slice!(0, 4).unpack("N")
+        nlocals,nregs = sdata.slice!(0, 4).unpack("n2")
+        puts("    - # irep #%d" % r)
+        puts("      record_size: 0x%08x" % recsz)
+        puts("      nlocals: %d" % nlocals)
+        puts("      nregs: %d" % nregs)
+        ilen, = sdata.slice!(0, 4).unpack("N")
+        puts("      ilen: %d" % ilen)
+        puts("      iseq: [")
+        i = ilen
+        n = 6
+        while(i > 0)
+          t = sdata.slice!(0, 4*[n,i].min).unpack("N*").map {|v| "0x%08x" % v}.join(", ")
+          i -= n
+          t += "," if i > 0
+          puts("        #{t}")
         end
+        puts("      ]")
+        plen, = sdata.slice!(0, 4).unpack("N")
+        puts("      plen: %d" % plen)
+        puts("      pool:") if plen > 0
+        plen.times {|n|
+          tt,len = sdata.slice!(0, 3).unpack("Cn")
+          v = sdata.slice!(0, len)
+          puts("        - # %d" % n)
+          puts("          type: #{TT_NAMES[tt] || "unknown"}")
+          puts("          len: %d" % len)
+          puts("          str: #{v.inspect}")
+        }
+        slen, = sdata.slice!(0, 4).unpack("N")
+        puts("      slen: %d" % slen)
+        puts("      syms:") if slen > 0
+        slen.times {|n|
+          len, = sdata.slice!(0, 2).unpack("n")
+          if(len < 0xffff)
+            v = sdata.slice!(0, len)
+            puts("        - %-16s # %d" % [v.inspect, n])
+            sdata.slice!(0, 1)
+          else
+            puts("        # %-16s # %d" % ["(dummy)", n])
+          end
+        }
       }
     elsif(secid == "LINE")
       nirep,sirep = sdata.slice!(0, 4).unpack("n2")
