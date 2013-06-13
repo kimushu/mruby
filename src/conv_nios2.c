@@ -14,7 +14,7 @@
 #include "opcode.h"
 #include "asm_nios2.h"
 
-#define DEBUG_RITEOP
+// #define DEBUG_RITEOP
 
 #define JUMPOFFSET_BITS       5
 #define ESTIMATE_RITE2NIOS    4
@@ -970,7 +970,7 @@ convert_iseq(convert_scope *s)
     to_pc = GETARG_Ax(src_pc[sbx]) >> JUMPOFFSET_BITS;
 
     *inst_update = (*inst_update & ~NIOS2_IMM16(0xffff)) |
-      NIOS2_IMM16(to_pc - from_pc);
+      NIOS2_IMM16(to_pc - from_pc) * 4;
   }
 
   return NULL;

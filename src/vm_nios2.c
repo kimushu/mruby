@@ -532,7 +532,7 @@ ENTRY_mrb(vm_setglobal, void, 2, mrb_sym sym, mrb_value value)
 {
   /* setglobal(Sym(b), R(A)) */
   DPRINT_INDENT(mrb);
-  DPRINTF(mrb, "OP_SETGLOBAL (sym=:%s, value=0x%x)\n", mrb_sym2name(mrb, sym), value.w);
+  DPRINTF(mrb, "OP_SETGLOBAL (sym=:%s, value=0x%x)\n", mrb_sym2name(mrb, sym), mrb_obj_ptr(value));
   mrb_gv_set(mrb, sym, value);
 }
 
@@ -548,7 +548,7 @@ ENTRY_mrb(vm_ivset, void, 2, mrb_sym sym, mrb_value value)
 {
   /* ivset(Sym(B),R(A)) */
   DPRINT_INDENT(mrb);
-  DPRINTF(mrb, "OP_SETIV (sym=:%s, value=0x%x)\n", mrb_sym2name(mrb, sym), value.w);
+  DPRINTF(mrb, "OP_SETIV (sym=:%s, value=0x%x)\n", mrb_sym2name(mrb, sym), mrb_obj_ptr(value));
   mrb_vm_iv_set(mrb, sym, value);
 }
 
@@ -564,7 +564,7 @@ ENTRY_mrb(vm_cvset, void, 2, mrb_sym sym, mrb_value value)
 {
   /* ivset(Sym(B),R(A)) */
   DPRINT_INDENT(mrb);
-  DPRINTF(mrb, "OP_SETCV (sym=:%s, value=0x%x)\n", mrb_sym2name(mrb, sym), value.w);
+  DPRINTF(mrb, "OP_SETCV (sym=:%s, value=0x%x)\n", mrb_sym2name(mrb, sym), mrb_obj_ptr(value));
   mrb_vm_cv_set(mrb, sym, value);
 }
 
@@ -580,25 +580,31 @@ ENTRY_mrb(vm_constset, void, 2, mrb_sym sym, mrb_value value)
 {
   /* A B    constset(Sym(B),R(A)) */
   DPRINT_INDENT(mrb);
-  DPRINTF(mrb, "OP_SETCONST (sym=:%s, value=0x%x)\n", mrb_sym2name(mrb, sym), value.w);
+  DPRINTF(mrb, "OP_SETCONST (sym=:%s, value=0x%x)\n", mrb_sym2name(mrb, sym), mrb_obj_ptr(value));
   mrb_vm_const_set(mrb, sym, value);
 }
 
 ENTRY_mrb(vm_getmcnst, mrb_value, 2, mrb_value recv, mrb_sym sym)
 {
   /* A B C  R(A) := R(C)::Sym(B) */
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_GETMCNST (recv=0x%x, sym=:%s)\n", mrb_obj_ptr(recv), mrb_sym2name(mrb, sym));
   return mrb_const_get(mrb, recv, sym);
 }
 
 ENTRY_mrb(vm_setmcnst, void, 3, mrb_value recv, mrb_sym sym, mrb_value value)
 {
   /* A B C  R(A+1)::Sym(B) := R(A) */
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_SETMCNST (recv=0x%x, sym=:%s, value=0x%x)\n", mrb_obj_ptr(recv), mrb_sym2name(mrb, sym), value);
   mrb_const_set(mrb, recv, sym, value);
 }
 
 ENTRY_mrb(vm_getupvar, mrb_value, 2, uint32_t idx, uint32_t up)
 {
   /* A B C  R(A) := uvget(B,C) */
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_GETUPVAR (idx=0x%x, up=0x%x)\n", idx, up);
   struct REnv *e = mrb_vm_uvenv(mrb, up);
 
   if (!e) {
@@ -612,6 +618,8 @@ ENTRY_mrb(vm_getupvar, mrb_value, 2, uint32_t idx, uint32_t up)
 ENTRY_mrb(vm_setupvar, void, 3, uint32_t idx, uint32_t up, mrb_value value)
 {
   /* A B C  uvset(B,C,R(A)) */
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_SETUPVAR (idx=0x%x, up=0x%x, value=0x%x)\n", idx, up, mrb_obj_ptr(value));
   struct REnv *e = mrb_vm_uvenv(mrb, up);
 
   if (e) {
@@ -624,6 +632,8 @@ ENTRY_vme(vm_hash_new, mrb_value, 2, mrb_value *array, uint32_t pairs)
 {
   /* A B C   R(A) := hash_new(R(B),R(B+1)..R(B+C)) */
   mrb_state *mrb = vme->mrb;
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_HASH (array=0x%x, pairs=0x%x)\n", array, pairs);
   int i = 0;
   mrb_value hash = mrb_hash_new_capa(mrb, pairs);
 
@@ -662,7 +672,7 @@ ENTRY_vme(vm_newclass, mrb_value, 3, mrb_value base, mrb_sym sym, mrb_value supe
   /* A B    R(A) := newclass(R(A),Sym(B),R(A+1)) */
   mrb_state *mrb = vme->mrb;
   DPRINT_INDENT(mrb);
-  DPRINTF(mrb, "OP_CLASS (sym=:%s, base=0x%x)\n", mrb_sym2name(mrb, sym), base.w);
+  DPRINTF(mrb, "OP_CLASS (sym=:%s, base=0x%x)\n", mrb_sym2name(mrb, sym), mrb_obj_ptr(base));
   mrb_value cls;
   struct RClass *c = 0;
 
@@ -680,7 +690,7 @@ ENTRY_vme(vm_newmethod, void, 3, mrb_value base, mrb_sym sym, mrb_value closure)
   /* A B            R(A).newmethod(Sym(B),R(A+1)) */
   mrb_state *mrb = vme->mrb;
   DPRINT_INDENT(mrb);
-  DPRINTF(mrb, "OP_METHOD (sym=:%s, base=0x%x)\n", mrb_sym2name(mrb, sym), base.w);
+  DPRINTF(mrb, "OP_METHOD (sym=:%s, base=0x%x)\n", mrb_sym2name(mrb, sym), mrb_obj_ptr(base));
   struct RClass *c = mrb_class_ptr(base);
 
   mrb_define_method_vm(mrb, c, sym, closure);
@@ -692,7 +702,7 @@ ENTRY_vme(vm_newmodule, mrb_value, 2, mrb_value base, mrb_sym sym)
   /* A B            R(A) := newmodule(R(A),Sym(B)) */
   mrb_state *mrb = vme->mrb;
   DPRINT_INDENT(mrb);
-  DPRINTF(mrb, "OP_MODULE (sym=:%s, base=0x%x)\n", mrb_sym2name(mrb, sym), base.w);
+  DPRINTF(mrb, "OP_MODULE (sym=:%s, base=0x%x)\n", mrb_sym2name(mrb, sym), mrb_obj_ptr(base));
   struct RClass *c = 0;
   mrb_value cls;
 
@@ -731,12 +741,16 @@ ENTRY_vme(vm_range_new, mrb_value, 3, mrb_value first, mrb_value second, uint32_
 ENTRY_mrb(vm_rescue, mrb_value, 1, int dummy)
 {
   /* A      R(A) := exc; clear(exc) */
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_RESCUE\n");
   return mrb_obj_value(mrb->exc);
 }
 
 ENTRY_mrb(vm_rescue_pop, void, 1, uint32_t times)
 {
   /* A       A.times{rescue_pop()} */
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_POPERR (times=0x%x)\n", times);
   while (times--) {
     mrb->c->ci->ridx--;
   }
@@ -746,6 +760,8 @@ ENTRY_vme_jmp(vm_rescue_push, void, 1, int32_t offset)
 {
   /* sBx    pc+=sBx on exception */
   mrb_state *mrb = vme->mrb;
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_ONERR (offset=0x%x)\n", offset);
   if (mrb->c->rsize <= mrb->c->ci->ridx) {
     if (mrb->c->rsize == 0) mrb->c->rsize = 16;
     else mrb->c->rsize *= 2;
@@ -990,6 +1006,8 @@ ENTRY_vme(vm_singleton_class, mrb_value, 1, mrb_value base)
 {
   /* A B    R(A) := R(B).singleton_class */
   mrb_state *mrb = vme->mrb;
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_SCLASS (base=0x%x)\n", mrb_obj_ptr(base));
   mrb_value cls;
   cls = mrb_singleton_class(mrb, base);
   mrb_gc_arena_restore(mrb, vme->ctx->ai);
@@ -999,6 +1017,8 @@ ENTRY_vme(vm_singleton_class, mrb_value, 1, mrb_value base)
 ENTRY_mrb(vm_str_cat, void, 2, mrb_value recv, mrb_value other)
 {
   /* A B    R(A).concat(R(B)) */
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_STRCAT (recv=0x%x, \"%s\")\n", mrb_obj_ptr(recv), mrb_str_to_cstr(mrb, other));
   mrb_str_concat(mrb, recv, other);
 }
 
@@ -1007,6 +1027,8 @@ ENTRY_vme(vm_str_dup, mrb_value, 1, mrb_value lit)
   /* A Bx           R(A) := str_new(Lit(Bx)) */
   mrb_state *mrb = vme->mrb;
   mrb_value str = mrb_str_literal(mrb, lit);
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_STRING (\"%s\")\n", mrb_str_to_cstr(mrb, str));
   mrb_gc_arena_restore(mrb, vme->ctx->ai);
   return str;
 }
@@ -1146,12 +1168,29 @@ ENTRY_mrb(vm_target_class, mrb_value, 1, int dummy)
   return mrb_obj_value(mrb->c->ci->target_class);
 }
 
-ENTRY_mrb(vm_stop_vm, void, 1, int dummy)
+ENTRY_vme_jmp(vm_stop_vm, mrb_value, 1, int dummy)
 {
+  /*        stop VM */
+  mrb_state *mrb = vme->mrb;
+  mrb_vm_context *vmc = vme->ctx;
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "OP_STOP\n");
+  int n = mrb->c->ci->eidx;
+
+  while (n--) {
+    mrb_vm_ecall(mrb, n);
+  }
+  mrb->jmp = vmc->prev_jmp;
+  jmp->pc = (mrb_code *)vm_epilogue;
+  if (mrb->exc) {
+    return mrb_obj_value(mrb->exc);
+  }
+  return jmp->regs[vmc->irep->nlocals];
 }
 
 ENTRY_mrb(vm_raise_err, void, 1, mrb_value obj)
 {
+  while(1);
 }
 
 static const mrb_vm_env env_initializer = {
