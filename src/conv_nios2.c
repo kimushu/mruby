@@ -545,13 +545,13 @@ convert_iseq(convert_scope *s)
     case OP_SENDB:
       /* A B C   R(A) := call(R(A),mSym(B),R(A+1),...,R(A+C)) */
       loadsym(s, 5, GETARG_B(i));
-      allocseq(s, 4);
-      genop(s, NIOS2_movi(4, GETARG_A(i)));
+      allocseq(s, 3);
       if (GETARG_C(i) < CALL_MAXARGS) {
-        genop(s, NIOS2_ori(4, 4, GETARG_C(i) << 9));
+        genop(s, NIOS2_movi(4, GETARG_A(i)|(GETARG_C(i)<<9)));
         genop(s, NIOS2_ldw(2, ENV(send_normal), NIOS2_VMENV_REG));
       }
       else {
+        genop(s, NIOS2_movi(4, GETARG_A(i)));
         genop(s, NIOS2_ldw(2, ENV(send_array), NIOS2_VMENV_REG));
       }
       genop(s, NIOS2_callr(2));
