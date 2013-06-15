@@ -393,6 +393,7 @@ ENTRY_vme_jmp(vm_call, void, 1, int dummy)
     vmc->irep = m->body.irep;
     if (!vmc->irep) {
       mrb->c->stack[0] = mrb_nil_value();
+      asm("break");
       while(1);
       // goto L_RETURN; TODO
     }
@@ -717,12 +718,14 @@ ENTRY_vme(vm_newmodule, mrb_value, 2, mrb_value base, mrb_sym sym)
 
 ENTRY_mrb(vm_raise, void, 1, mrb_value obj)
 {
+  asm("break");
   while(1);
 }
 
 static void
 vm_raise_exc(mrb_state *mrb)
 {
+  asm("break");
   while(1);
 }
 
@@ -1190,6 +1193,7 @@ ENTRY_vme_jmp(vm_stop_vm, mrb_value, 1, int dummy)
 
 ENTRY_mrb(vm_raise_err, void, 1, mrb_value obj)
 {
+  asm("break");
   while(1);
 }
 
