@@ -884,9 +884,9 @@ convert_iseq(convert_scope *s)
       break;
     case OP_MODULE:
       /* A B     R(A) := newmodule(R(A),mSym(B)) */
-      allocseq(s, 5);
+      loadsym(s, 5, GETARG_B(i));
+      allocseq(s, 4);
       genop(s, NIOS2_ldw(4, GETARG_A(i)*4, NIOS2_STACK_REG));
-      genop(s, NIOS2_movui(5, GETARG_B(i)));
       genop(s, NIOS2_ldw(2, ENV(newmodule), NIOS2_VMENV_REG));
       genop(s, NIOS2_callr(2));
       genop(s, NIOS2_stw(2, GETARG_A(i)*4, NIOS2_STACK_REG));
