@@ -496,7 +496,6 @@ convert_iseq(convert_scope *s)
       break;
     case OP_RESCUE:
       /* A       clear(exc); R(A) := exception (ignore when A=0) */
-      allocseq(s, 3);
       allocseq(s, 2);
       genop(s, NIOS2_ldw(2, ENV(rescue), NIOS2_VMENV_REG));
       if (GETARG_A(i) != 0) {
@@ -565,7 +564,7 @@ convert_iseq(convert_scope *s)
       break;
     case OP_SUPER:
       /* A B C   R(A) := super(R(A+1),... ,R(A+C-1)) */
-      allocseq(s, 5);
+      allocseq(s, 4);
       genop(s, NIOS2_movi(4, GETARG_A(i)));
       if (GETARG_C(i) < CALL_MAXARGS) {
         genop(s, NIOS2_ori(4, 4, GETARG_C(i) << 9));
@@ -586,7 +585,7 @@ convert_iseq(convert_scope *s)
       break;
     case OP_ENTER:
       /* Ax      arg setup according to flags (24=5:5:1:5:5:1:1) */
-      allocseq(s, 4);
+      allocseq(s, 8);
       genop(s, NIOS2_ldw(2, ENV(enter), NIOS2_VMENV_REG));
       if (GETARG_Ax(i) > 0xffff) {
         genop(s, NIOS2_movhi(4, GETARG_Ax(i)>>16));
@@ -606,7 +605,7 @@ convert_iseq(convert_scope *s)
     /* case OP_KARG: */
     /* case OP_KDICT: */
     case OP_RETURN:
-      allocseq(s, 5);
+      allocseq(s, 4);
       /* A B     return R(A) (B=normal,in-block return/break) */
       genop(s, NIOS2_movi(5, GETARG_B(i)));
       genop(s, NIOS2_ldw(2, ENV(ret), NIOS2_VMENV_REG));
@@ -875,7 +874,7 @@ convert_iseq(convert_scope *s)
     case OP_CLASS:
       /* A B     R(A) := newclass(R(A),mSym(B),R(A+1)) */
       loadsym(s, 5, GETARG_B(i));
-      allocseq(s, 6);
+      allocseq(s, 5);
       genop(s, NIOS2_ldw(4, GETARG_A(i)*4, NIOS2_STACK_REG));
       genop(s, NIOS2_ldw(6, (GETARG_A(i)+1)*4, NIOS2_STACK_REG));
       genop(s, NIOS2_ldw(2, ENV(newclass), NIOS2_VMENV_REG));
