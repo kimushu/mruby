@@ -26,8 +26,13 @@
 #define TO_STR(x) TO_STR_(x)
 #define TO_STR_(x) #x
 
+#define ENABLE_DPRINTF
+#ifdef ENABLE_DPRINTF
 #define DPRINTF(mrb, fmt, ...) \
   if(mrb->vm_env->dprintf) mrb->vm_env->dprintf(fmt, ## __VA_ARGS__)
+#else
+#define DPRINTF(mrb, fmt, ...)  do {} while(0)
+#endif
 
 #define ENTRY_vme(name, rtype, argc, ...) \
   static void\
