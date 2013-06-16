@@ -14,7 +14,7 @@
 #include "opcode.h"
 #include "asm_nios2.h"
 
-// #define DEBUG_RITEOP
+#define DEBUG_RITEOP
 
 #define JUMPOFFSET_BITS       5
 #define ESTIMATE_RITE2NIOS    4
@@ -53,16 +53,12 @@ struct mrb_machine machine_nios2 = {
 
 enum nios2_disasm_format {
   fmt_none,
-#ifdef DEBUG_RITEOP
-  fmt_dbg,
-#else
-  fmt_dbg = fmt_none,
-#endif
   fmt_opx,
   fmt_cab,
   fmt_basv,
   fmt_bauv,
   fmt_absv,
+  fmt_dbg,  /* fmt_absv or debug */
   fmt_sv,
   fmt_i5,
   fmt_i26,
@@ -92,7 +88,7 @@ static const struct nios2_disasm_map disasm_map[] = {
   {"cmplti",fmt_basv},{NULL,    fmt_none},{NULL,    fmt_none},{"initda",fmt_sva},
   {"ori",   fmt_bauv},{"stw",   fmt_ldst},{"blt",   fmt_absv},{"ldw",   fmt_ldst},
   {"cmpnei",fmt_basv},{NULL,    fmt_none},{NULL,    fmt_none},{"flushda",fmt_sva},
-  {"xori",  fmt_bauv},{NULL,    fmt_none},{"bne",   fmt_absv},{NULL,    fmt_none},
+  {"xori",  fmt_bauv},{NULL,    fmt_none},{"bne",   fmt_dbg}, {NULL,    fmt_none},
   {"cmpeqi",fmt_basv},{NULL,    fmt_none},{NULL,    fmt_none},{"ldbuio",fmt_ldst},
   {"muli",  fmt_basv},{"stbio", fmt_ldst},{"beq",   fmt_absv},{"ldbio", fmt_ldst},
   {"cmpgeui",fmt_basv},{NULL,   fmt_none},{NULL,    fmt_none},{"ldhuio",fmt_ldst},
@@ -117,7 +113,7 @@ static const struct nios2_disasm_map disasm_mapx[] = {
   {"cmpgeu",fmt_cab}, {"initi", fmt_a},   {NULL,    fmt_none},{NULL,    fmt_none},
   {NULL,    fmt_none},{"trap",  fmt_i5},  {"wrctl", fmt_na},  {NULL,    fmt_none},
   {"cmpltu",fmt_cab}, {"add",   fmt_cab}, {NULL,    fmt_none},{NULL,    fmt_none},
-  {"break", fmt_i5},  {NULL,    fmt_none},{"sync",  fmt_dbg}, {NULL,    fmt_none},
+  {"break", fmt_i5},  {NULL,    fmt_none},{"sync",  fmt_none},{NULL,    fmt_none},
   {NULL,    fmt_none},{"sub",   fmt_cab}, {"srai",  fmt_cai5},{"sra",   fmt_cab},
   {NULL,    fmt_none},{NULL,    fmt_none},{NULL,    fmt_none},{NULL,    fmt_none},
 };
@@ -289,7 +285,7 @@ convert_iseq(convert_scope *s)
 
 #ifdef DEBUG_RITEOP
     allocseq(s, 1);
-    genop(s, NIOS2_sync()|NIOS2_A(GET_OPCODE(i)>>5)|NIOS2_B(GET_OPCODE(i)));
+    genop(s, NIOS2_bne(0, 0, GET_OPCODE(i)<<2));
 #endif
     switch (GET_OPCODE(i)) {
     case OP_NOP:
@@ -1046,6 +1042,18 @@ L_RETRY:
       printf("%-8sr%d, r%d, 0x%04x\n", map->mnemonic,
         NIOS2_GET_B(c), NIOS2_GET_A(c), NIOS2_GET_IMM16(c));
       break;
+    case fmt_dbg:
+      if (NIOS2_GET_A(c) == NIOS2_GET_B(c)) {
+        int op = (NIOS2_GET_IMM16(c)>>2)&0x7f;
+        if (op < (sizeof(disasm_riteop) / sizeof(*disasm_riteop))) {
+          printf("(%s)\n", disasm_riteop[op]);
+        }
+        else {
+          printf("(Unknown RiteVM opcode 0x%x)\n", op);
+        }
+        break;
+      }
+      /* fall through */
     case fmt_absv:
       printf("%-8sr%d, r%d, %d\n", map->mnemonic,
         NIOS2_GET_A(c), NIOS2_GET_B(c), (int16_t)NIOS2_GET_IMM16(c));
@@ -1091,22 +1099,11 @@ L_RETRY:
     case fmt_cn:
       break;
     case fmt_cai5:
+      printf("%-8sr%d, r%d, %d\n", map->mnemonic,
+        NIOS2_GET_C(c), NIOS2_GET_A(c), NIOS2_GET_IMM5(c));
       break;
     case fmt_na:
       break;
-#ifdef DEBUG_RITEOP
-    case fmt_dbg:
-      {
-        int op = (NIOS2_GET_A(c) << 5) | NIOS2_GET_B(c);
-        if (op < (sizeof(disasm_riteop) / sizeof(*disasm_riteop))) {
-          printf("(%s)\n", disasm_riteop[op]);
-        }
-        else {
-          printf("(Unknown RiteVM opcode 0x%x)\n", op);
-        }
-      }
-      break;
-#endif
     }
   }
   printf("\n");
