@@ -351,6 +351,8 @@ ENTRY_vme_jmp(vm_blockexec, mrb_value, 2, int a, uint32_t bx)
     ci->nregs = vmc->irep->nregs;
     jmp->regs = mrb->c->stack;
     jmp->pc = vmc->irep->iseq;
+    DPRINT_INDENT(mrb);
+    DPRINTF(mrb, "--> jump to 0x%x\n", jmp->pc);
     return mrb_nil_value();
   }
 }
@@ -414,6 +416,8 @@ ENTRY_vme_jmp(vm_call, void, 1, int dummy)
     jmp->regs = mrb->c->stack;
     jmp->regs[0] = m->env->stack[0];
     jmp->pc = vmc->irep->iseq;
+    DPRINT_INDENT(mrb);
+    DPRINTF(mrb, "--> jump to 0x%x\n", jmp->pc);
   }
 }
 
@@ -846,6 +850,8 @@ ENTRY_vme_jmp(vm_ret, mrb_value, 2, mrb_value v, int b)
     if (acc < 0) {
       mrb->jmp = vmc->prev_jmp;
       jmp->pc = (mrb_code *)vm_epilogue;
+      DPRINT_INDENT(mrb);
+      DPRINTF(mrb, "--> return to epilogue\n");
       return v;
     }
     // DEBUG(printf("from :%s\n", mrb_sym2name(mrb, ci->mid)));
@@ -853,6 +859,8 @@ ENTRY_vme_jmp(vm_ret, mrb_value, 2, mrb_value v, int b)
     vmc->irep = vmc->proc->body.irep;
     vmc->pool = vmc->irep->pool;
     vmc->syms = vmc->irep->syms;
+    DPRINT_INDENT(mrb);
+    DPRINTF(mrb, "--> return to 0x%x\n", jmp->pc);
 
     jmp->regs[acc] = v;
   }
@@ -930,6 +938,8 @@ ENTRY_vme_jmp(vm_send_array, void, 2, int a, mrb_sym mid)
     mrb_vm_stack_extend(mrb, (vmc->irep->nregs < 3) ? 3 : vmc->irep->nregs, 3);
     jmp->regs = mrb->c->stack;
     jmp->pc = vmc->irep->iseq;
+    DPRINT_INDENT(mrb);
+    DPRINTF(mrb, "--> jump to 0x%x\n", jmp->pc);
   }
 }
 
@@ -1007,6 +1017,8 @@ ENTRY_vme_jmp(vm_send_normal, void, 2, uint32_t n_a, mrb_sym mid)
     mrb_vm_stack_extend(mrb, vmc->irep->nregs,  ci->argc+2);
     jmp->regs = mrb->c->stack;
     jmp->pc = vmc->irep->iseq;
+    DPRINT_INDENT(mrb);
+    DPRINTF(mrb, "--> jump to 0x%x\n", jmp->pc);
   }
 }
 
@@ -1097,6 +1109,8 @@ ENTRY_vme_jmp(vm_super_array, void, 1, uint32_t a)
     mrb_vm_stack_extend(mrb, (vmc->irep->nregs < 3) ? 3 : vmc->irep->nregs, 3);
     jmp->regs = mrb->c->stack;
     jmp->pc = vmc->irep->iseq;
+    DPRINT_INDENT(mrb);
+    DPRINTF(mrb, "--> jump to 0x%x\n", jmp->pc);
   }
 }
 
@@ -1159,6 +1173,8 @@ ENTRY_vme_jmp(vm_super_normal, void, 1, uint32_t n_a)
     mrb_vm_stack_extend(mrb, vmc->irep->nregs, ci->argc+2);
     jmp->regs = mrb->c->stack;
     jmp->pc = vmc->irep->iseq;
+    DPRINT_INDENT(mrb);
+    DPRINTF(mrb, "--> jump to 0x%x\n", jmp->pc);
   }
 }
 
@@ -1190,6 +1206,8 @@ ENTRY_vme_jmp(vm_stop_vm, mrb_value, 1, int dummy)
   }
   mrb->jmp = vmc->prev_jmp;
   jmp->pc = (mrb_code *)vm_epilogue;
+  DPRINT_INDENT(mrb);
+  DPRINTF(mrb, "--> jump to epilogue\n");
   if (mrb->exc) {
     return mrb_obj_value(mrb->exc);
   }
