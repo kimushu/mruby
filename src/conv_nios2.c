@@ -488,7 +488,7 @@ convert_iseq(convert_scope *s)
       genop(s, NIOS2_movi(4, GETARG_sBx(i)));  /* placeholder */
       genop(s, NIOS2_subi(4, 4, 2));
       genop(s, NIOS2_callr(2));
-      *src_pc |= MKARG_Ax(2+1);
+      *src_pc |= MKARG_Ax(1+1);
       break;
     case OP_RESCUE:
       /* A       clear(exc); R(A) := exception (ignore when A=0) */
@@ -635,7 +635,8 @@ convert_iseq(convert_scope *s)
       genop(s, NIOS2_and(5, 5, 6));
       genop(s, NIOS2_blt(5, 0, 2*4)); /* To method call */
       genop(s, NIOS2_stw(4, GETARG_A(i)*4, NIOS2_STACK_REG));
-      genop(s, NIOS2_br(9*4));
+      genop(s, NIOS2_br(1));  /* placeholder */
+      *src_pc |= MKARG_Ax(12+1);
       /* Method call */
       goto L_OP_SEND;
     case OP_ADDI:
@@ -658,7 +659,8 @@ convert_iseq(convert_scope *s)
         genop(s, NIOS2_bgt(3, 2, 2*4));  /* To method call */
       }
       genop(s, NIOS2_stw(4, GETARG_A(i)*4, NIOS2_STACK_REG));
-      genop(s, NIOS2_br((9+2)*4));
+      genop(s, NIOS2_br(1));  /* placeholder */
+      *src_pc |= MKARG_Ax(6+1);
       /* Method call */
       genop(s, NIOS2_movi(2, (GETARG_C(i)<<MRB_FIXNUM_SHIFT)|MRB_FIXNUM_FLAG));
       genop(s, NIOS2_stw(2, (GETARG_A(i)+1)*4, NIOS2_STACK_REG));
@@ -681,7 +683,8 @@ convert_iseq(convert_scope *s)
       genop(s, NIOS2_and(5, 5, 6));
       genop(s, NIOS2_blt(5, 0, 2*4)); /* To method call */
       genop(s, NIOS2_stw(4, GETARG_A(i)*4, NIOS2_STACK_REG));
-      genop(s, NIOS2_br(9*4));
+      genop(s, NIOS2_br(1));  /* placeholder */
+      *src_pc |= MKARG_Ax(12+1);
       /* Method call */
       goto L_OP_SEND;
     case OP_SUBI:
@@ -704,7 +707,8 @@ convert_iseq(convert_scope *s)
         genop(s, NIOS2_bgt(3, 2, 2*4));  /* To method call */
       }
       genop(s, NIOS2_stw(4, GETARG_A(i)*4, NIOS2_STACK_REG));
-      genop(s, NIOS2_br((9+2)*4));
+      genop(s, NIOS2_br(1));  /* placeholder */
+      *src_pc |= MKARG_Ax(6+1);
       /* Method call */
       genop(s, NIOS2_movi(2, (GETARG_C(i)<<MRB_FIXNUM_SHIFT)|MRB_FIXNUM_FLAG));
       genop(s, NIOS2_stw(2, (GETARG_A(i)+1)*4, NIOS2_STACK_REG));
@@ -727,7 +731,8 @@ convert_iseq(convert_scope *s)
       genop(s, NIOS2_bne(2, 3, 1*4));
       genop(s, NIOS2_movui(4, MRB_Qtrue));
       genop(s, NIOS2_stw(4, GETARG_A(i)*4, NIOS2_STACK_REG));
-      genop(s, NIOS2_br(9*4));
+      genop(s, NIOS2_br(1));  /* placeholder */
+      *src_pc |= MKARG_Ax(10+1);
       /* Method call */
       goto L_OP_SEND;
     case OP_LT:
@@ -762,7 +767,8 @@ convert_iseq(convert_scope *s)
       }
       genop(s, NIOS2_movui(4, MRB_Qtrue));
       genop(s, NIOS2_stw(4, GETARG_A(i)*4, NIOS2_STACK_REG));
-      genop(s, NIOS2_br(9*4));
+      genop(s, NIOS2_br(1));  /* placeholder */
+      *src_pc |= MKARG_Ax(9+1);
       /* Method call */
       goto L_OP_SEND;
     case OP_ARRAY:
@@ -960,6 +966,9 @@ convert_iseq(convert_scope *s)
     }
 
     from_pc = (GETARG_Ax(i) >> JUMPOFFSET_BITS) + pos;
+#ifdef DEBUG_RITEOP
+    ++from_pc;  /* for debug instruction */
+#endif
     inst_update = &s->new_iseq[from_pc - 1];
     sbx = NIOS2_GET_IMM16(*inst_update);
     to_pc = GETARG_Ax(src_pc[sbx]) >> JUMPOFFSET_BITS;
