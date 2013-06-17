@@ -581,7 +581,7 @@ convert_iseq(convert_scope *s)
       break;
     case OP_ENTER:
       /* Ax      arg setup according to flags (24=5:5:1:5:5:1:1) */
-      allocseq(s, 8);
+      allocseq(s, 9);
       genop(s, NIOS2_ldw(2, ENV(enter), NIOS2_VMENV_REG));
       if (GETARG_Ax(i) > 0xffff) {
         genop(s, NIOS2_movhi(4, GETARG_Ax(i)>>16));
@@ -593,10 +593,13 @@ convert_iseq(convert_scope *s)
         genop(s, NIOS2_movui(4, GETARG_Ax(i)));
       }
       genop(s, NIOS2_callr(2));
+#ifdef DEBUG_RITEOP
+      genop(s, NIOS2_add(2, 2, 2));
+#endif
       genop(s, NIOS2_nextpc(4));
-      genop(s, NIOS2_add(2, 2, 4));
-      genop(s, NIOS2_addi(2, 2, 12));
-      genop(s, NIOS2_jmp(2));
+      genop(s, NIOS2_addi(2, 2, (3*4)));  /* 0 */
+      genop(s, NIOS2_add(2, 2, 4));       /* 1 */
+      genop(s, NIOS2_jmp(2));             /* 2 */
       break;
     /* case OP_KARG: */
     /* case OP_KDICT: */
@@ -974,7 +977,7 @@ convert_iseq(convert_scope *s)
     to_pc = GETARG_Ax(src_pc[sbx]) >> JUMPOFFSET_BITS;
 
     *inst_update = (*inst_update & ~NIOS2_IMM16(0xffff)) |
-      NIOS2_IMM16(to_pc - from_pc) * 4;
+      NIOS2_IMM16((to_pc - from_pc) * 4);
   }
 
   return NULL;
