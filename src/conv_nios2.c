@@ -234,7 +234,7 @@ genop(convert_scope *s, uint32_t c)
 static void
 loadlit(convert_scope *s, int store, uint32_t index)
 {
-  index *= sizeof(mrb_value);
+  index *= 4;
   if (index < 0x8000) {
     allocseq(s, 3);
     genop(s, NIOS2_ldw(store, ENV(ctx), NIOS2_VMENV_REG));
