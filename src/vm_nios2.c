@@ -1324,4 +1324,34 @@ NAKED vm_epilogue(void)
   );
 }
 
+uint8_t readb(void *address)
+{
+  return __builtin_ldbuio(address);
+}
+
+void writeb(uint8_t value, void *address)
+{
+  __builtin_stbio(address, value);
+}
+
+uint16_t readw(void *address)
+{
+  return __builtin_ldhuio(address);
+}
+
+void writew(uint16_t value, void *address)
+{
+  __builtin_sthio(address, value);
+}
+
+uint32_t readl(void *address)
+{
+  return __builtin_ldwio(address);
+}
+
+void writel(uint32_t value, void *address)
+{
+  __builtin_stwio(address, value);
+}
+
 #endif  /* MRB_MACHINE_NIOS2 */

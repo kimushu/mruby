@@ -99,6 +99,8 @@ MRuby::CrossBuild.new('nios2') do |conf|
   conf.cc.flags << "-O0"
   conf.gem 'mrbgems/mruby-bin-mruby'
   conf.gem 'mrbgems/mruby-print'
+  conf.gem 'mrbgems/embed-hardware'
+  conf.gem 'mrbgems/nios2-de0nano'
 
   # mrbc settings
   conf.mrbc do |mrbc|
