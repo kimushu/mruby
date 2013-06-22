@@ -28,6 +28,17 @@ struct hw_reg {
 
 extern uint32_t readl(void *address);
 extern void writel(uint32_t value, void *address);
+extern void msleep(uint32_t msecs);
+
+static mrb_value
+hw_sys_msleep(mrb_state *mrb, mrb_value self)
+{
+  mrb_int msecs;
+  mrb_get_args(mrb, "i", &msecs);
+
+  msleep(msecs);
+  return self;
+}
 
 static void
 hw_reg_free(mrb_state *mrb, void *ptr)
@@ -68,7 +79,7 @@ hw_reg_new(mrb_state *mrb, mrb_value self)
   data->width = width;
   data->mask = ((1 << width) - 1) << lsb;
 
-  return hw_reg_wrap(mrb, mrb_obj_class(mrb, self), data);
+  return hw_reg_wrap(mrb, mrb_class_ptr(self), data);
 }
 
 static mrb_value
@@ -102,7 +113,6 @@ hw_reg_slice(mrb_state *mrb, mrb_value self)
 
   width = msb - lsb + 1;
   if (width < 0 || msb >= data->width) goto arg_error;
-  if (lsb >= data->width || msb ) return mrb_nil_value();
 
   if (!(data->flags & REGFLAG_ROOT)) {
     lsb += data->lsb;
@@ -240,11 +250,11 @@ mrb_embed_hardware_gem_init(mrb_state* mrb)
   struct RClass *reg;
 
   hw = mrb_define_module(mrb, "Hardware");
+
   sys = mrb_define_class_under(mrb, hw, "System",   mrb->object_class);
+  mrb_define_class_method(mrb, sys, "msleep", hw_sys_msleep,  MRB_ARGS_REQ(1));
+
   reg = mrb_define_class_under(mrb, hw, "Register", mrb->object_class);
-
-  // mrb_define_class_method(mrb, sys, "new",  hw_sys_def,       MRB_ARGS_NONE());
-
   mrb_define_class_method(mrb, reg, "new",  hw_reg_new,       MRB_ARGS_REQ(3));
   mrb_define_method(mrb, reg, "slice",    hw_reg_slice,       MRB_ARGS_REQ(1));
   mrb_define_alias (mrb, reg, "[]", "slice");

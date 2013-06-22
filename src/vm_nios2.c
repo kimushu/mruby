@@ -26,7 +26,7 @@
 #define TO_STR(x) TO_STR_(x)
 #define TO_STR_(x) #x
 
-#define ENABLE_DPRINTF
+// #define ENABLE_DPRINTF
 #ifdef ENABLE_DPRINTF
 #define DPRINTF(mrb, fmt, ...) \
   if(mrb->vm_env->dprintf) mrb->vm_env->dprintf(fmt, ## __VA_ARGS__)
@@ -566,7 +566,7 @@ ENTRY_mrb(vm_cvget, mrb_value, 1, mrb_sym sym)
 {
   /* A B    R(A) := cvget(Sym(B)) */
   DPRINT_INDENT(mrb);
-  DPRINTF(mrb, "OP_GETcV (sym=:%s)\n", mrb_sym2name(mrb, sym));
+  DPRINTF(mrb, "OP_GETCV (sym=:%s)\n", mrb_sym2name(mrb, sym));
   return mrb_vm_cv_get(mrb, sym);
 }
 
@@ -1273,6 +1273,7 @@ static const mrb_vm_env env_initializer = {
 };
 
 void (*nios2_dprintf)(const char *, ...);
+void (*nios2_msleep)(uint32_t);
 
 void
 mrb_vm_env_init(mrb_state *mrb)
@@ -1352,6 +1353,11 @@ uint32_t readl(void *address)
 void writel(uint32_t value, void *address)
 {
   __builtin_stwio(address, value);
+}
+
+void msleep(uint32_t msecs)
+{
+  if(nios2_msleep) (*nios2_msleep)(msecs);
 }
 
 #endif  /* MRB_MACHINE_NIOS2 */
