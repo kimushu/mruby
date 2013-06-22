@@ -49,6 +49,7 @@
     ::\
     "i"(argc+4), "i"(NIOS2_VMENV_REG));\
   }\
+  __attribute__((used))\
   static rtype\
   name(__VA_ARGS__, mrb_vm_env *vme)
 
@@ -69,6 +70,7 @@
     "i"(argc+4), "i"(NIOS2_VMENV_REG),\
     "i"(argc+5), "i"(NIOS2_STACK_REG));\
   }\
+  __attribute__((used))\
   static rtype\
   name(__VA_ARGS__, mrb_vm_env *vme, mrb_value *regs)
 
@@ -87,6 +89,7 @@
     ::\
     "i"(argc+4), "i"(offsetof(mrb_vm_env, mrb)), "i"(NIOS2_VMENV_REG));\
   }\
+  __attribute__((used))\
   static rtype\
   name(__VA_ARGS__, mrb_state *mrb)
 
@@ -116,6 +119,7 @@ typedef struct {
     "i"(argc+4), "i"(NIOS2_VMENV_REG),\
     "i"(argc+5));\
   }\
+  __attribute__((used))\
   static rtype\
   name(__VA_ARGS__, mrb_vm_env *vme, vm_jmpinfo *jmp)
 
