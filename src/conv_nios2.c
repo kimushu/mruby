@@ -939,15 +939,20 @@ convert_iseq(convert_scope *s)
     case OP_STOP:
       /*         stop VM */
       allocseq(s, 2);
-      genop(s, NIOS2_ldw(2, ENV(stop_vm), NIOS2_VMENV_REG));
+      genop(s, NIOS2_ldw(2, ENV(stop), NIOS2_VMENV_REG));
       genop(s, NIOS2_jmp(2));
       break;
     case OP_ERR:
-      /* Bx      raise RuntimeError with message Lit(Bx) */
+      /* A Bx    raise RuntimeError with message Lit(Bx) */
       loadlit(s, 4, GETARG_Bx(i));
       allocseq(s, 2);
-      genop(s, NIOS2_ldw(2, ENV(raise_err), NIOS2_VMENV_REG));
-      genop(s, NIOS2_callr(2));
+      if (GETARG_A(i) == 0) {
+        genop(s, NIOS2_ldw(2, ENV(runtime_err), NIOS2_VMENV_REG));
+      }
+      else {
+        genop(s, NIOS2_ldw(2, ENV(localjump_err), NIOS2_VMENV_REG));
+      }
+      genop(s, NIOS2_jmp(2));
       break;
     default:
       return "unknown instruction";

@@ -89,8 +89,9 @@ typedef struct mrb_vm_env {
   NIOS2_VAR32(void *, super_array);
   NIOS2_VAR32(void *, super_normal);
   NIOS2_VAR32(void *, target_class);
-  NIOS2_VAR32(void *, stop_vm);
-  NIOS2_VAR32(void *, raise_err);
+  NIOS2_VAR32(void *, stop);
+  NIOS2_VAR32(void *, runtime_err);
+  NIOS2_VAR32(void *, localjump_err);
 
   NIOS2_FUNCP(void,       dprintf,        (const char*, ...));
 } mrb_vm_env;

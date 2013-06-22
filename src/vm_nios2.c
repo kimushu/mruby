@@ -142,10 +142,10 @@ void mrb_vm_ecall(mrb_state *mrb, int i);
 void mrb_vm_localjump_error(mrb_state *mrb, localjump_error_kind kind);
 void mrb_vm_argnum_error(mrb_state *mrb, int num);
 
-static void vm_raise_exc(mrb_state *mrb);
+static void vm_raise_exc(mrb_vm_env *vme, vm_jmpinfo *jmp);
 static void vm_epilogue(void);
 
-ENTRY_vme_regs(vm_argary, mrb_pair, 1, uint32_t bx)
+ENTRY_vme_jmp(vm_argary, mrb_pair, 1, uint32_t bx)
 {
   /* A Bx   R(A) := argument array (16=6:1:5:4) */
   mrb_state *mrb = vme->mrb;
@@ -158,7 +158,7 @@ ENTRY_vme_regs(vm_argary, mrb_pair, 1, uint32_t bx)
   mrb_pair args;
   mrb_value *stack;
 
-  if (lv == 0) stack = regs + 1;
+  if (lv == 0) stack = jmp->regs + 1;
   else {
     struct REnv *e = mrb_vm_uvenv(mrb, lv-1);
     if (!e) {
@@ -166,7 +166,7 @@ ENTRY_vme_regs(vm_argary, mrb_pair, 1, uint32_t bx)
       static const char m[] = "super called outside of method";
       exc = mrb_exc_new(mrb, E_NOMETHOD_ERROR, m, sizeof(m) - 1);
       mrb->exc = mrb_obj_ptr(exc);
-      vm_raise_exc(mrb);
+      vm_raise_exc(vme, jmp);
     }
     stack = e->stack + 1;
   }
@@ -286,7 +286,7 @@ ENTRY_mrb(vm_ary_store, void, 3, mrb_value recv, uint32_t index, mrb_value value
   mrb_ary_set(mrb, recv, index, value);
 }
 
-ENTRY_vme_regs(vm_blk_push, mrb_value, 1, uint32_t bx)
+ENTRY_vme_jmp(vm_blk_push, mrb_value, 1, uint32_t bx)
 {
   /* A Bx   R(A) := block (16=6:1:5:4) */
   mrb_state *mrb = vme->mrb;
@@ -298,12 +298,12 @@ ENTRY_vme_regs(vm_blk_push, mrb_value, 1, uint32_t bx)
   DPRINTF(mrb, "OP_BLKPUSH (0x%x:0x%x:0x%x:0x%x)\n", m1, r, m2, lv);
   mrb_value *stack;
 
-  if (lv == 0) stack = regs + 1;
+  if (lv == 0) stack = jmp->regs + 1;
   else {
     struct REnv *e = mrb_vm_uvenv(mrb, lv-1);
     if (!e) {
       mrb_vm_localjump_error(mrb, LOCALJUMP_ERROR_YIELD);
-      vm_raise_exc(mrb);
+      vm_raise_exc(vme, jmp);
     }
     stack = e->stack + 1;
   }
@@ -341,7 +341,7 @@ ENTRY_vme_jmp(vm_blockexec, mrb_value, 2, int a, uint32_t bx)
     mrb_value result;
     result = p->body.func(mrb, recv);
     mrb_gc_arena_restore(mrb, vmc->ai);
-    if (mrb->exc) vm_raise_exc(mrb);
+    if (mrb->exc) vm_raise_exc(vme, jmp);
     /* pop stackpos */
     jmp->regs = mrb->c->stack = mrb->c->stbase + mrb->c->ci->stackidx;
     mrb_vm_cipop(mrb);
@@ -387,7 +387,7 @@ ENTRY_vme_jmp(vm_call, void, 1, int dummy)
   if (MRB_PROC_CFUNC_P(m)) {
     recv = m->body.func(mrb, recv);
     mrb_gc_arena_restore(mrb, vmc->ai);
-    if (mrb->exc) vm_raise_exc(mrb);
+    if (mrb->exc) vm_raise_exc(vme, jmp);
     /* pop stackpos */
     ci = mrb->c->ci;
     jmp->regs = mrb->c->stack = mrb->c->stbase + ci->stackidx;
@@ -454,7 +454,7 @@ ENTRY_vme(vm_ensure_push, void, 1, uint32_t bx)
   mrb_gc_arena_restore(mrb, vme->ctx->ai);
 }
 
-ENTRY_vme_regs(vm_enter, int32_t, 1, uint32_t ax)
+ENTRY_vme_jmp(vm_enter, int32_t, 1, uint32_t ax)
 {
   /* Ax             arg setup according to flags (24=5:5:1:5:5:1:1) */
   /* number of optional arguments times OP_JMP should follow */
@@ -471,22 +471,22 @@ ENTRY_vme_regs(vm_enter, int32_t, 1, uint32_t ax)
      int b  = (ax>>0)& 0x1;
      */
   int argc = mrb->c->ci->argc;
-  mrb_value *argv = regs+1;
+  mrb_value *argv = jmp->regs+1;
   mrb_value *argv0 = argv;
   int len = m1 + o + r + m2;
   mrb_value *blk = &argv[argc < 0 ? 1 : argc];
 
   if (argc < 0) {
-    struct RArray *ary = mrb_ary_ptr(regs[1]);
+    struct RArray *ary = mrb_ary_ptr(jmp->regs[1]);
     argv = ary->ptr;
     argc = ary->len;
-    mrb_gc_protect(mrb, regs[1]);
+    mrb_gc_protect(mrb, jmp->regs[1]);
   }
   if (mrb->c->ci->proc && MRB_PROC_STRICT_P(mrb->c->ci->proc)) {
     if (argc >= 0) {
       if (argc < m1 + m2 || (r == 0 && argc > len)) {
         mrb_vm_argnum_error(mrb, m1+m2);
-        vm_raise_exc(mrb);
+        vm_raise_exc(vme, jmp);
       }
     }
   }
@@ -496,19 +496,19 @@ ENTRY_vme_regs(vm_enter, int32_t, 1, uint32_t ax)
   }
   mrb->c->ci->argc = len;
   if (argc < len) {
-    regs[len+1] = *blk; /* move block */
+    jmp->regs[len+1] = *blk; /* move block */
     if (argv0 != argv) {
-      value_move(&regs[1], argv, argc-m2); /* m1 + o */
+      value_move(&jmp->regs[1], argv, argc-m2); /* m1 + o */
     }
     if (m2) {
       int mlen = m2;
       if (argc-m2 <= m1) {
         mlen = argc - m1;
       }
-      value_move(&regs[len-m2+1], &argv[argc-mlen], mlen);
+      value_move(&jmp->regs[len-m2+1], &argv[argc-mlen], mlen);
     }
     if (r) {
-      regs[m1+o+1] = mrb_ary_new_capa(mrb, 0);
+      jmp->regs[m1+o+1] = mrb_ary_new_capa(mrb, 0);
     }
     if (o == 0) return 0;
     else
@@ -516,19 +516,19 @@ ENTRY_vme_regs(vm_enter, int32_t, 1, uint32_t ax)
   }
   else {
     if (argv0 != argv) {
-      regs[len+1] = *blk; /* move block */
-      value_move(&regs[1], argv, m1+o);
+      jmp->regs[len+1] = *blk; /* move block */
+      value_move(&jmp->regs[1], argv, m1+o);
     }
     if (r) {
-      regs[m1+o+1] = mrb_ary_new_from_values(mrb, argc-m1-o-m2, argv+m1+o);
+      jmp->regs[m1+o+1] = mrb_ary_new_from_values(mrb, argc-m1-o-m2, argv+m1+o);
     }
     if (m2) {
       if (argc-m2 > m1) {
-        value_move(&regs[m1+o+r+1], &argv[argc-m2], m2);
+        value_move(&jmp->regs[m1+o+r+1], &argv[argc-m2], m2);
       }
     }
     if (argv0 == argv) {
-      regs[len+1] = *blk; /* move block */
+      jmp->regs[len+1] = *blk; /* move block */
     }
     return o;
   }
@@ -729,17 +729,11 @@ ENTRY_vme(vm_newmodule, mrb_value, 2, mrb_value base, mrb_sym sym)
   return cls;
 }
 
-ENTRY_mrb(vm_raise, void, 1, mrb_value obj)
+ENTRY_vme_jmp(vm_raise, void, 1, mrb_value obj)
 {
-  asm("break");
-  while(1);
-}
-
-static void
-vm_raise_exc(mrb_state *mrb)
-{
-  asm("break");
-  while(1);
+  /* A       raise(R(A)) */
+  vme->mrb->exc = mrb_obj_ptr(obj);
+  vm_raise_exc(vme, jmp);
 }
 
 ENTRY_vme(vm_range_new, mrb_value, 3, mrb_value first, mrb_value second, uint32_t exclude)
@@ -793,7 +787,7 @@ ENTRY_vme_jmp(vm_ret, mrb_value, 2, mrb_value v, int b)
   mrb_vm_context *vmc = vme->ctx;
   DPRINT_INDENT(mrb);
   DPRINTF(mrb, "OP_RETURN (b=%x)\n", b);
-  if (mrb->exc) vm_raise_exc(mrb);
+  if (mrb->exc) vm_raise_exc(vme, jmp);
   else {
     mrb_callinfo *ci = mrb->c->ci;
     int acc, eidx = mrb->c->ci->eidx;
@@ -806,12 +800,12 @@ ENTRY_vme_jmp(vm_ret, mrb_value, 2, mrb_value v, int b)
 
           if (e->cioff < 0) {
             mrb_vm_localjump_error(mrb, LOCALJUMP_ERROR_RETURN);
-            vm_raise_exc(mrb);
+            vm_raise_exc(vme, jmp);
           }
           ci = mrb->c->cibase + e->cioff;
           if (ci == mrb->c->cibase) {
             mrb_vm_localjump_error(mrb, LOCALJUMP_ERROR_RETURN);
-            vm_raise_exc(mrb);
+            vm_raise_exc(vme, jmp);
           }
           mrb->c->ci = ci;
           break;
@@ -820,12 +814,12 @@ ENTRY_vme_jmp(vm_ret, mrb_value, 2, mrb_value v, int b)
         if (ci == mrb->c->cibase) {
           if (!mrb->c->prev) { /* toplevel return */
             mrb_vm_localjump_error(mrb, LOCALJUMP_ERROR_RETURN);
-            vm_raise_exc(mrb);
+            vm_raise_exc(vme, jmp);
           }
           if (mrb->c->prev->ci == mrb->c->prev->cibase) {
             mrb_value exc = mrb_exc_new3(mrb, E_RUNTIME_ERROR, mrb_str_new(mrb, "double resume", 13));
             mrb->exc = mrb_obj_ptr(exc);
-            vm_raise_exc(mrb);
+            vm_raise_exc(vme, jmp);
           }
           /* automatic yield at the end */
           mrb->c->status = MRB_FIBER_TERMINATED;
@@ -836,7 +830,7 @@ ENTRY_vme_jmp(vm_ret, mrb_value, 2, mrb_value v, int b)
       case OP_R_BREAK:
         if (proc->env->cioff < 0) {
           mrb_vm_localjump_error(mrb, LOCALJUMP_ERROR_BREAK);
-          vm_raise_exc(mrb);
+          vm_raise_exc(vme, jmp);
         }
         ci = mrb->c->ci = mrb->c->cibase + proc->env->cioff + 1;
         break;
@@ -918,7 +912,7 @@ ENTRY_vme_jmp(vm_send_array, void, 2, int a, mrb_sym mid)
     result = m->body.func(mrb, recv);
     mrb->c->stack[0] = result;
     mrb_gc_arena_restore(mrb, vmc->ai);
-    if (mrb->exc) vm_raise_exc(mrb);
+    if (mrb->exc) vm_raise_exc(vme, jmp);
     /* pop stackpos */
     ci = mrb->c->ci;
     if (!ci->target_class) { /* return from context modifying method (resume/yield) */
@@ -997,7 +991,7 @@ ENTRY_vme_jmp(vm_send_normal, void, 2, uint32_t n_a, mrb_sym mid)
     result = m->body.func(mrb, recv);
     mrb->c->stack[0] = result;
     mrb_gc_arena_restore(mrb, vmc->ai);
-    if (mrb->exc) vm_raise_exc(mrb);
+    if (mrb->exc) vm_raise_exc(vme, jmp);
     /* pop stackpos */
     ci = mrb->c->ci;
     if (!ci->target_class) { /* return from context modifying method (resume/yield) */
@@ -1095,7 +1089,7 @@ ENTRY_vme_jmp(vm_super_array, void, 1, uint32_t a)
   if (MRB_PROC_CFUNC_P(m)) {
     mrb->c->stack[0] = m->body.func(mrb, recv);
     mrb_gc_arena_restore(mrb, vmc->ai);
-    if (mrb->exc) vm_raise_exc(mrb);
+    if (mrb->exc) vm_raise_exc(vme, jmp);
     /* pop stackpos */
     jmp->regs = mrb->c->stack = mrb->c->stbase + mrb->c->ci->stackidx;
     mrb_vm_cipop(mrb);
@@ -1159,7 +1153,7 @@ ENTRY_vme_jmp(vm_super_normal, void, 1, uint32_t n_a)
   if (MRB_PROC_CFUNC_P(m)) {
     mrb->c->stack[0] = m->body.func(mrb, recv);
     mrb_gc_arena_restore(mrb, vmc->ai);
-    if (mrb->exc) vm_raise_exc(mrb);
+    if (mrb->exc) vm_raise_exc(vme, jmp);
     /* pop stackpos */
     jmp->regs = mrb->c->stack = mrb->c->stbase + mrb->c->ci->stackidx;
     mrb_vm_cipop(mrb);
@@ -1182,21 +1176,22 @@ ENTRY_vme_jmp(vm_super_normal, void, 1, uint32_t n_a)
   }
 }
 
-ENTRY_mrb(vm_target_class, mrb_value, 1, int dummy)
+ENTRY_vme_jmp(vm_target_class, mrb_value, 1, int dummy)
 {
   /* A B    R(A) := target_class */
+  mrb_state *mrb = vme->mrb;
   DPRINT_INDENT(mrb);
   DPRINTF(mrb, "OP_TCLASS\n");
   if (!mrb->c->ci->target_class) {
     static const char msg[] = "no target class or module";
     mrb_value exc = mrb_exc_new(mrb, E_TYPE_ERROR, msg, sizeof(msg) - 1);
     mrb->exc = mrb_obj_ptr(exc);
-    vm_raise_exc(mrb);
+    vm_raise_exc(vme, jmp);
   }
   return mrb_obj_value(mrb->c->ci->target_class);
 }
 
-ENTRY_vme_jmp(vm_stop_vm, mrb_value, 1, int dummy)
+ENTRY_vme_jmp(vm_stop, mrb_value, 1, int dummy)
 {
   /*        stop VM */
   mrb_state *mrb = vme->mrb;
@@ -1218,10 +1213,20 @@ ENTRY_vme_jmp(vm_stop_vm, mrb_value, 1, int dummy)
   return jmp->regs[vmc->irep->nlocals];
 }
 
-ENTRY_mrb(vm_raise_err, void, 1, mrb_value obj)
+ENTRY_vme_jmp(vm_runtime_err, void, 1, mrb_value msg)
 {
-  asm("break");
-  while(1);
+  /* A Bx    raise RuntimeError with message Lit(Bx) */
+  mrb_state *mrb = vme->mrb;
+  mrb->exc = mrb_obj_ptr(mrb_exc_new3(mrb, E_RUNTIME_ERROR, msg));
+  vm_raise_exc(vme, jmp);
+}
+
+ENTRY_vme_jmp(vm_localjump_err, void, 1, mrb_value msg)
+{
+  /* A Bx    raise LocalJumpError with message Lit(Bx) */
+  mrb_state *mrb = vme->mrb;
+  mrb->exc = mrb_obj_ptr(mrb_exc_new3(mrb, E_LOCALJUMP_ERROR, msg));
+  vm_raise_exc(vme, jmp);
 }
 
 static const mrb_vm_env env_initializer = {
@@ -1272,8 +1277,9 @@ static const mrb_vm_env env_initializer = {
   .super_array     = vm_super_array_entry,
   .super_normal    = vm_super_normal_entry,
   .target_class    = vm_target_class_entry,
-  .stop_vm         = vm_stop_vm_entry,
-  .raise_err       = vm_raise_err_entry,
+  .stop            = vm_stop_entry,
+  .runtime_err     = vm_runtime_err_entry,
+  .localjump_err   = vm_localjump_err_entry,
 };
 
 void (*nios2_dprintf)(const char *, ...);
@@ -1327,6 +1333,56 @@ NAKED vm_epilogue(void)
   ::
   "i"(NIOS2_VMENV_REG), "i"(NIOS2_STACK_REG)
   );
+}
+
+static void
+vm_raise_exc(mrb_vm_env *vme, vm_jmpinfo *jmp)
+{
+  mrb_state *mrb = vme->mrb;
+  mrb_vm_context *vmc = vme->ctx;
+  mrb_callinfo *ci;
+  int eidx;
+
+  ci = mrb->c->ci;
+  mrb_obj_iv_ifnone(mrb, mrb->exc, mrb_intern2(mrb, "lastpc", 6), mrb_voidp_value(mrb, jmp->pc));
+  mrb_obj_iv_ifnone(mrb, mrb->exc, mrb_intern2(mrb, "ciidx", 5), mrb_fixnum_value(ci - mrb->c->cibase));
+  eidx = ci->eidx;
+  if (ci == mrb->c->cibase) {
+    if (ci->ridx == 0) {
+      vm_stop(0, vme, jmp);
+      return;
+    }
+    goto L_RESCUE;
+  }
+  while (eidx > ci[-1].eidx) {
+    mrb_vm_ecall(mrb, --eidx);
+  }
+  while (ci[0].ridx == ci[-1].ridx) {
+    mrb_vm_cipop(mrb);
+    ci = mrb->c->ci;
+    mrb->c->stack = mrb->c->stbase + ci[1].stackidx;
+    if (ci[1].acc < 0 && vmc->prev_jmp) {
+      mrb->jmp = vmc->prev_jmp;
+      longjmp(*(jmp_buf*)mrb->jmp, 1);
+    }
+    while (eidx > ci->eidx) {
+      mrb_vm_ecall(mrb, --eidx);
+    }
+    if (ci == mrb->c->cibase) {
+      if (ci->ridx == 0) {
+        jmp->regs = mrb->c->stack = mrb->c->stbase;
+        vm_stop(0, vme, jmp);
+        return;
+      }
+      break;
+    }
+  }
+L_RESCUE:
+  vmc->irep = ci->proc->body.irep;
+  vmc->pool = vmc->irep->pool;
+  vmc->syms = vmc->irep->syms;
+  jmp->regs = mrb->c->stack = mrb->c->stbase + ci[1].stackidx;
+  jmp->pc = mrb->c->rescue[--ci->ridx];
 }
 
 uint8_t readb(void *address)
