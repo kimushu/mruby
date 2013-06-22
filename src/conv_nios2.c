@@ -4,17 +4,18 @@
 ** See Copyright Notice in mruby.h
 */
 
-#ifdef MRB_CONVERTER_NIOS2
-
 #define MRB_WORD_BOXING
 #include "mruby.h"
 #include "mruby/compile.h"
 #include "mruby/irep.h"
+
+#ifdef MRB_CONVERTER_NIOS2
+
 #include "mruby/vm_nios2.h"
 #include "opcode.h"
 #include "asm_nios2.h"
 
-#define DEBUG_RITEOP
+// #define DEBUG_RITEOP
 
 #define JUMPOFFSET_BITS       5
 #define ESTIMATE_RITE2NIOS    4
@@ -661,7 +662,7 @@ convert_iseq(convert_scope *s)
       else {
         genop(s, NIOS2_bgt(3, 2, 2*4));  /* To method call */
       }
-      genop(s, NIOS2_stw(4, GETARG_A(i)*4, NIOS2_STACK_REG));
+      genop(s, NIOS2_stw(3, GETARG_A(i)*4, NIOS2_STACK_REG));
       genop(s, NIOS2_br(1));  /* placeholder */
       *src_pc |= MKARG_Ax(6+1);
       /* Method call */
@@ -709,7 +710,7 @@ convert_iseq(convert_scope *s)
       else {
         genop(s, NIOS2_bgt(3, 2, 2*4));  /* To method call */
       }
-      genop(s, NIOS2_stw(4, GETARG_A(i)*4, NIOS2_STACK_REG));
+      genop(s, NIOS2_stw(3, GETARG_A(i)*4, NIOS2_STACK_REG));
       genop(s, NIOS2_br(1));  /* placeholder */
       *src_pc |= MKARG_Ax(6+1);
       /* Method call */
@@ -939,7 +940,7 @@ convert_iseq(convert_scope *s)
       /*         stop VM */
       allocseq(s, 2);
       genop(s, NIOS2_ldw(2, ENV(stop_vm), NIOS2_VMENV_REG));
-      genop(s, NIOS2_callr(2));
+      genop(s, NIOS2_jmp(2));
       break;
     case OP_ERR:
       /* Bx      raise RuntimeError with message Lit(Bx) */
@@ -1055,6 +1056,7 @@ L_RETRY:
         NIOS2_GET_B(c), NIOS2_GET_A(c), NIOS2_GET_IMM16(c));
       break;
     case fmt_dbg:
+#ifdef DEBUG_RITEOP
       if (NIOS2_GET_A(c) == NIOS2_GET_B(c)) {
         int op = (NIOS2_GET_IMM16(c)>>2)&0x7f;
         if (op < (sizeof(disasm_riteop) / sizeof(*disasm_riteop))) {
@@ -1065,6 +1067,7 @@ L_RETRY:
         }
         break;
       }
+#endif
       /* fall through */
     case fmt_absv:
       printf("%-8sr%d, r%d, %d\n", map->mnemonic,
