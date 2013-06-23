@@ -8,9 +8,18 @@
 #include "mruby/class.h"
 #include "mruby/proc.h"
 #include "opcode.h"
+#ifdef MRB_CONVERTER_NIOS2
+#include "mruby/vm_nios2.h"
+#include "asm_nios2.h"
+#endif
 
 static mrb_code call_iseq[] = {
+#ifdef MRB_CONVERTER_NIOS2
+  NIOS2_ldw(2, offsetof(mrb_vm_env, call), NIOS2_VMENV_REG),
+  NIOS2_callr(2),
+#else
   MKOP_A(OP_CALL, 0),
+#endif
 };
 
 struct RProc *
@@ -191,7 +200,7 @@ mrb_init_proc(mrb_state *mrb)
   call_irep->flags = MRB_ISEQ_NO_FREE;
   call_irep->idx = -1;
   call_irep->iseq = call_iseq;
-  call_irep->ilen = 1;
+  call_irep->ilen = sizeof(call_iseq) / sizeof(*call_iseq);
 
   mrb->proc_class = mrb_define_class(mrb, "Proc", mrb->object_class);
   MRB_SET_INSTANCE_TT(mrb->proc_class, MRB_TT_PROC);

@@ -21,6 +21,9 @@
 #include "error.h"
 #include "opcode.h"
 #include "value_array.h"
+#ifdef MRB_MACHINE_NIOS2
+#include "mruby/vm_nios2.h"
+#endif
 
 #ifndef ENABLE_STDIO
 #if defined(__cplusplus)
@@ -507,6 +510,9 @@ argnum_error(mrb_state *mrb, int num)
   mrb->exc = mrb_obj_ptr(exc);
 }
 
+#ifdef MRB_MACHINE_RITE
+/* RiteVM */
+
 #ifdef ENABLE_DEBUG
 #define CODE_FETCH_HOOK(mrb, irep, pc, regs) ((mrb)->code_fetch_hook ? (mrb)->code_fetch_hook((mrb), (irep), (pc), (regs)) : NULL)
 #else
@@ -739,7 +745,6 @@ mrb_run(mrb_state *mrb, struct RProc *proc, mrb_value self)
 
     CASE(OP_SETUPVAR) {
       /* A B C  uvset(B,C,R(A)) */
-      /* A B C  R(A) := uvget(B,C) */
       int up = GETARG_C(i);
 
       struct REnv *e = uvenv(mrb, up);
@@ -2127,3 +2132,95 @@ mrb_run(mrb_state *mrb, struct RProc *proc, mrb_value self)
   }
   END_DISPATCH;
 }
+
+#elif defined(MRB_MACHINE_NIOS2)
+/* Nios2 */
+
+void
+mrb_vm_stack_copy(mrb_value *dst, const mrb_value *src, size_t size)
+{
+  stack_copy(dst, src, size);
+}
+
+void
+mrb_vm_stack_extend(mrb_state *mrb, int room, int keep)
+{
+  return stack_extend(mrb, room, keep);
+}
+
+struct REnv*
+mrb_vm_uvenv(mrb_state *mrb, int up)
+{
+  return uvenv(mrb, up);
+}
+
+struct REnv*
+mrb_vm_top_env(mrb_state *mrb, struct RProc *proc)
+{
+  top_env(mrb, proc);
+}
+
+mrb_callinfo*
+mrb_vm_cipush(mrb_state *mrb)
+{
+  return cipush(mrb);
+}
+
+void
+mrb_vm_cipop(mrb_state *mrb)
+{
+  cipop(mrb);
+}
+
+void
+mrb_vm_ecall(mrb_state *mrb, int i)
+{
+  ecall(mrb, i);
+}
+
+void
+mrb_vm_localjump_error(mrb_state *mrb, localjump_error_kind kind)
+{
+  localjump_error(mrb, kind);
+}
+
+void
+mrb_vm_argnum_error(mrb_state *mrb, int num)
+{
+  argnum_error(mrb, num);
+}
+
+mrb_value
+mrb_run(mrb_state *mrb, struct RProc *proc, mrb_value self)
+{
+  mrb_vm_context vmc;
+  vmc.proc = proc;
+  vmc.irep = proc->body.irep;
+  vmc.pool = vmc.irep->pool;
+  vmc.syms = vmc.irep->syms;
+  vmc.ai = mrb_gc_arena_save(mrb);
+  vmc.prev_jmp = &mrb->jmp;
+  mrb->vm_env->ctx = &vmc;
+  jmp_buf c_jmp;
+
+  if (setjmp(c_jmp) == 0) {
+    mrb->jmp = &c_jmp;
+  }
+  else {
+    /* TODO: L_RAISE */
+  }
+
+  if (!mrb->c->stack) {
+    stack_init(mrb);
+  }
+  stack_extend(mrb, vmc.irep->nregs, vmc.irep->nregs);
+  mrb->c->ci->proc = proc;
+  mrb->c->ci->nregs = vmc.irep->nregs + 1;
+  mrb->c->stack[0] = self;
+
+  return mrb_vm_exec(mrb, vmc.irep->iseq);
+}
+
+#else /* no MRB_MACHINE_xxxx */
+# error "No VM type defined"
+#endif

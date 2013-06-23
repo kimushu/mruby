@@ -24,7 +24,7 @@
 //#define MRB_ENDIAN_BIG
 
 /* represent mrb_value as a word (natural unit of data for the processor) */
-// #define MRB_WORD_BOXING
+//#define MRB_WORD_BOXING
 
 /* argv max size in mrb_funcall */
 //#define MRB_FUNCALL_ARGC_MAX 16
@@ -63,6 +63,18 @@
 //#define ENABLE_DEBUG		/* hooks for debugger */
 
 /* end of configuration */
+
+/* check machine type */
+#ifdef MRB_MACHINE_NIOS2
+# ifndef __NIOS2__
+# error "MRB_MACHINE_NIOS2 must be used on Nios2 target"
+# endif
+# define MRB_WORD_BOXING
+# define MRB_MACHINE_NAME "nios2"
+#else
+# define MRB_MACHINE_RITE
+# define MRB_MACHINE_NAME "rite"
+#endif
 
 /* define ENABLE_XXXX from DISABLE_XXX */
 #ifndef DISABLE_STDIO

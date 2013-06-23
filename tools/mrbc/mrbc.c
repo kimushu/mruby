@@ -21,6 +21,7 @@ struct mrbc_args {
   const char *prog;
   const char *outfile;
   const char *initname;
+  const char *machinename;
   mrb_bool check_syntax : 1;
   mrb_bool verbose      : 1;
   mrb_bool debug_info   : 1;
@@ -36,6 +37,7 @@ usage(const char *name)
   "-v           print version number, then turn on verbose mode",
   "-g           produce debugging information",
   "-B<symbol>   binary <symbol> output in C language format",
+  "-m<machine>  select machine type of VM (default: rite)",
   "--verbose    run at verbose mode",
   "--version    print the version",
   "--copyright  print the copyright",
@@ -104,6 +106,19 @@ parse_args(mrb_state *mrb, int argc, char **argv, struct mrbc_args *args)
         }
         if (*args->initname == '\0') {
           fprintf(stderr, "%s: function name is not specified.\n", args->prog);
+          return -1;
+        }
+        break;
+      case 'm':
+        if (argv[i][2] == '\0' && argv[i+1]) {
+          i++;
+          args->machinename = argv[i];
+        }
+        else {
+          args->machinename = argv[i]+2;
+        }
+        if (mrb_set_machine(mrb, args->machinename) < 0) {
+          fprintf(stderr, "%s: machine `%s' is not found.\n", args->prog, args->machinename);
           return -1;
         }
         break;

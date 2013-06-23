@@ -14,6 +14,8 @@ MRuby::Build.new do |conf|
   # include the default GEMs
   conf.gembox 'default'
 
+  conf.cc.defines << "MRB_CONVERTER_NIOS2"
+  conf.cc.flags << "-O0"
   # C compiler settings
   # conf.cc do |cc|
   #   cc.command = ENV['CC'] || 'gcc'
@@ -86,3 +88,23 @@ end
 #   conf.test_runner.command = 'env'
 #
 # end
+
+MRuby::CrossBuild.new('nios2') do |conf|
+  toolchain :nios2
+  conf.cc.defines << "MRB_MACHINE_NIOS2"
+  conf.cc.defines << "MRB_CONVERTER_NIOS2"
+  conf.cc.flags << "-mno-hw-div"
+  conf.cc.flags << "-mno-hw-mul"
+  conf.cc.flags << "-mno-hw-mulx"
+  # conf.cc.flags << "-O0"
+  # conf.gem 'mrbgems/mruby-bin-mruby'
+  # conf.gem 'mrbgems/mruby-bin-mirb'
+  conf.gem 'mrbgems/mruby-print'
+  conf.gem 'mrbgems/embed-hardware'
+  conf.gem 'mrbgems/nios2-de0nano'
+
+  # mrbc settings
+  conf.mrbc do |mrbc|
+    mrbc.compile_options += " -mnios2"
+  end
+end
