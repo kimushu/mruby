@@ -2199,7 +2199,7 @@ mrb_run(mrb_state *mrb, struct RProc *proc, mrb_value self)
   vmc.pool = vmc.irep->pool;
   vmc.syms = vmc.irep->syms;
   vmc.ai = mrb_gc_arena_save(mrb);
-  vmc.prev_jmp = &mrb->jmp;
+  vmc.prev_jmp = mrb->jmp;
   mrb->vm_env->ctx = &vmc;
   jmp_buf c_jmp;
 
@@ -2207,7 +2207,7 @@ mrb_run(mrb_state *mrb, struct RProc *proc, mrb_value self)
     mrb->jmp = &c_jmp;
   }
   else {
-    /* TODO: L_RAISE */
+    return mrb_vm_exec(mrb, mrb_vm_raise_handler());
   }
 
   if (!mrb->c->stack) {

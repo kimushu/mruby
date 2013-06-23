@@ -101,5 +101,6 @@ typedef struct mrb_vm_env {
 
 void mrb_vm_env_init(mrb_state *mrb);
 mrb_value mrb_vm_exec(mrb_state *mrb, mrb_code *code);
+mrb_code *mrb_vm_raise_handler(void);
 
 #endif  /* MRUBY_VM_NIOS2_H */

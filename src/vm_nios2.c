@@ -51,28 +51,7 @@
   }\
   __attribute__((used))\
   static rtype\
-  name(__VA_ARGS__, mrb_vm_env *vme)
-
-#define ENTRY_vme_regs(name, rtype, argc, ...) \
-  static void\
-  NAKED name##_entry(void)\
-  {\
-    asm("\t"\
-    "addi sp, sp, -4\n\t"\
-    "stw  ra, 0(sp)\n\t"\
-    "mov  r%0, r%1\n\t"\
-    "mov  r%2, r%3\n\t"\
-    "call " #name "\n\t"\
-    "ldw  ra, 0(sp)\n\t"\
-    "addi sp, sp, 4\n\t"\
-    "ret\n"\
-    ::\
-    "i"(argc+4), "i"(NIOS2_VMENV_REG),\
-    "i"(argc+5), "i"(NIOS2_STACK_REG));\
-  }\
-  __attribute__((used))\
-  static rtype\
-  name(__VA_ARGS__, mrb_vm_env *vme, mrb_value *regs)
+  name(__VA_ARGS__ mrb_vm_env *vme)
 
 #define ENTRY_mrb(name, rtype, argc, ...)  \
   static void\
@@ -91,7 +70,7 @@
   }\
   __attribute__((used))\
   static rtype\
-  name(__VA_ARGS__, mrb_state *mrb)
+  name(__VA_ARGS__ mrb_state *mrb)
 
 typedef struct {
   mrb_code *pc;     /* 0 */
@@ -121,7 +100,7 @@ typedef struct {
   }\
   __attribute__((used))\
   static rtype\
-  name(__VA_ARGS__, mrb_vm_env *vme, vm_jmpinfo *jmp)
+  name(__VA_ARGS__ mrb_vm_env *vme, vm_jmpinfo *jmp)
 
 static const char debug_indents[] = "                ";
 #define DPRINT_INDENT(mrb)    DPRINTF(mrb, "%s", debug_indents + (16 - (mrb->c->ci - mrb->c->cibase)))
@@ -145,7 +124,7 @@ void mrb_vm_argnum_error(mrb_state *mrb, int num);
 static void vm_raise_exc(mrb_vm_env *vme, vm_jmpinfo *jmp);
 static void vm_epilogue(void);
 
-ENTRY_vme_jmp(vm_argary, mrb_pair, 1, uint32_t bx)
+ENTRY_vme_jmp(vm_argary, mrb_pair, 1, uint32_t bx, )
 {
   /* A Bx   R(A) := argument array (16=6:1:5:4) */
   mrb_state *mrb = vme->mrb;
@@ -201,7 +180,7 @@ ENTRY_vme_jmp(vm_argary, mrb_pair, 1, uint32_t bx)
   return args;
 }
 
-ENTRY_vme(vm_ary_cat, void, 2, mrb_value recv, mrb_value other)
+ENTRY_vme(vm_ary_cat, void, 2, mrb_value recv, mrb_value other, )
 {
   /* A B            mrb_ary_concat(R(A),R(B)) */
   mrb_state *mrb = vme->mrb;
@@ -209,7 +188,7 @@ ENTRY_vme(vm_ary_cat, void, 2, mrb_value recv, mrb_value other)
   mrb_gc_arena_restore(mrb, vme->ctx->ai);
 }
 
-ENTRY_mrb(vm_ary_fetch, mrb_value, 2, mrb_value recv, uint32_t index)
+ENTRY_mrb(vm_ary_fetch, mrb_value, 2, mrb_value recv, uint32_t index, )
 {
   /* A B C          R(A) := R(B)[C] */
   if (!mrb_array_p(recv)) {
@@ -225,7 +204,7 @@ ENTRY_mrb(vm_ary_fetch, mrb_value, 2, mrb_value recv, uint32_t index)
   }
 }
 
-ENTRY_vme(vm_ary_new, mrb_value, 2, mrb_value *array, uint32_t max)
+ENTRY_vme(vm_ary_new, mrb_value, 2, mrb_value *array, uint32_t max, )
 {
   /* A B C          R(A) := ary_new(R(B),R(B+1)..R(B+C)) */
   mrb_state *mrb = vme->mrb;
@@ -235,7 +214,7 @@ ENTRY_vme(vm_ary_new, mrb_value, 2, mrb_value *array, uint32_t max)
   return ary;
 }
 
-ENTRY_vme(vm_ary_post, void, 3, mrb_value *array, uint32_t pre, uint32_t post)
+ENTRY_vme(vm_ary_post, void, 3, mrb_value *array, uint32_t pre, uint32_t post, )
 {
   /* A B C  *R(A),R(A+1)..R(A+C) := R(A) */
   mrb_state *mrb = vme->mrb;
@@ -274,19 +253,19 @@ ENTRY_vme(vm_ary_post, void, 3, mrb_value *array, uint32_t pre, uint32_t post)
   mrb_gc_arena_restore(mrb, vme->ctx->ai);
 }
 
-ENTRY_mrb(vm_ary_push, void, 2, mrb_value recv, mrb_value value)
+ENTRY_mrb(vm_ary_push, void, 2, mrb_value recv, mrb_value value, )
 {
   /* A B            R(A).push(R(B)) */
   mrb_ary_push(mrb, recv, value);
 }
 
-ENTRY_mrb(vm_ary_store, void, 3, mrb_value recv, uint32_t index, mrb_value value)
+ENTRY_mrb(vm_ary_store, void, 3, mrb_value recv, uint32_t index, mrb_value value, )
 {
   /* A B C          R(B)[C] := R(A) */
   mrb_ary_set(mrb, recv, index, value);
 }
 
-ENTRY_vme_jmp(vm_blk_push, mrb_value, 1, uint32_t bx)
+ENTRY_vme_jmp(vm_blk_push, mrb_value, 1, uint32_t bx, )
 {
   /* A Bx   R(A) := block (16=6:1:5:4) */
   mrb_state *mrb = vme->mrb;
@@ -310,7 +289,7 @@ ENTRY_vme_jmp(vm_blk_push, mrb_value, 1, uint32_t bx)
   return stack[m1+r+m2];
 }
 
-ENTRY_vme_jmp(vm_blockexec, mrb_value, 2, int a, uint32_t bx)
+ENTRY_vme_jmp(vm_blockexec, mrb_value, 2, int a, uint32_t bx, )
 {
   /* A Bx   R(A) := blockexec(R(A),SEQ[Bx]) */
   mrb_state *mrb = vme->mrb;
@@ -361,7 +340,7 @@ ENTRY_vme_jmp(vm_blockexec, mrb_value, 2, int a, uint32_t bx)
   }
 }
 
-ENTRY_vme_jmp(vm_call, void, 1, int dummy)
+ENTRY_vme_jmp(vm_call, void, 0, )
 {
   /* A      R(A) := self.call(frame.argc, frame.argv) */
   mrb_state *mrb = vme->mrb;
@@ -425,7 +404,7 @@ ENTRY_vme_jmp(vm_call, void, 1, int dummy)
   }
 }
 
-ENTRY_vme(vm_ensure_pop, void, 1, uint32_t times)
+ENTRY_vme(vm_ensure_pop, void, 1, uint32_t times, )
 {
   /* A      A.times{ensure_pop().call} */
   mrb_state *mrb = vme->mrb;
@@ -437,7 +416,7 @@ ENTRY_vme(vm_ensure_pop, void, 1, uint32_t times)
   mrb_gc_arena_restore(mrb, vme->ctx->ai);
 }
 
-ENTRY_vme(vm_ensure_push, void, 1, uint32_t bx)
+ENTRY_vme(vm_ensure_push, void, 1, uint32_t bx, )
 {
   /* Bx     ensure_push(SEQ[Bx]) */
   mrb_state *mrb = vme->mrb;
@@ -454,7 +433,7 @@ ENTRY_vme(vm_ensure_push, void, 1, uint32_t bx)
   mrb_gc_arena_restore(mrb, vme->ctx->ai);
 }
 
-ENTRY_vme_jmp(vm_enter, int32_t, 1, uint32_t ax)
+ENTRY_vme_jmp(vm_enter, int32_t, 1, uint32_t ax, )
 {
   /* Ax             arg setup according to flags (24=5:5:1:5:5:1:1) */
   /* number of optional arguments times OP_JMP should follow */
@@ -534,7 +513,7 @@ ENTRY_vme_jmp(vm_enter, int32_t, 1, uint32_t ax)
   }
 }
 
-ENTRY_mrb(vm_getglobal, mrb_value, 1, mrb_sym sym)
+ENTRY_mrb(vm_getglobal, mrb_value, 1, mrb_sym sym, )
 {
   /* A B    R(A) := getglobal(Sym(B)) */
   DPRINT_INDENT(mrb);
@@ -542,7 +521,7 @@ ENTRY_mrb(vm_getglobal, mrb_value, 1, mrb_sym sym)
   return mrb_gv_get(mrb, sym);
 }
 
-ENTRY_mrb(vm_setglobal, void, 2, mrb_sym sym, mrb_value value)
+ENTRY_mrb(vm_setglobal, void, 2, mrb_sym sym, mrb_value value, )
 {
   /* setglobal(Sym(b), R(A)) */
   DPRINT_INDENT(mrb);
@@ -550,7 +529,7 @@ ENTRY_mrb(vm_setglobal, void, 2, mrb_sym sym, mrb_value value)
   mrb_gv_set(mrb, sym, value);
 }
 
-ENTRY_mrb(vm_ivget, mrb_value, 1, mrb_sym sym)
+ENTRY_mrb(vm_ivget, mrb_value, 1, mrb_sym sym, )
 {
   /* A Bx   R(A) := ivget(Bx) */
   DPRINT_INDENT(mrb);
@@ -558,7 +537,7 @@ ENTRY_mrb(vm_ivget, mrb_value, 1, mrb_sym sym)
   return mrb_vm_iv_get(mrb, sym);
 }
 
-ENTRY_mrb(vm_ivset, void, 2, mrb_sym sym, mrb_value value)
+ENTRY_mrb(vm_ivset, void, 2, mrb_sym sym, mrb_value value, )
 {
   /* ivset(Sym(B),R(A)) */
   DPRINT_INDENT(mrb);
@@ -566,7 +545,7 @@ ENTRY_mrb(vm_ivset, void, 2, mrb_sym sym, mrb_value value)
   mrb_vm_iv_set(mrb, sym, value);
 }
 
-ENTRY_mrb(vm_cvget, mrb_value, 1, mrb_sym sym)
+ENTRY_mrb(vm_cvget, mrb_value, 1, mrb_sym sym, )
 {
   /* A B    R(A) := cvget(Sym(B)) */
   DPRINT_INDENT(mrb);
@@ -574,7 +553,7 @@ ENTRY_mrb(vm_cvget, mrb_value, 1, mrb_sym sym)
   return mrb_vm_cv_get(mrb, sym);
 }
 
-ENTRY_mrb(vm_cvset, void, 2, mrb_sym sym, mrb_value value)
+ENTRY_mrb(vm_cvset, void, 2, mrb_sym sym, mrb_value value, )
 {
   /* ivset(Sym(B),R(A)) */
   DPRINT_INDENT(mrb);
@@ -582,7 +561,7 @@ ENTRY_mrb(vm_cvset, void, 2, mrb_sym sym, mrb_value value)
   mrb_vm_cv_set(mrb, sym, value);
 }
 
-ENTRY_mrb(vm_constget, mrb_value, 1, mrb_sym sym)
+ENTRY_mrb(vm_constget, mrb_value, 1, mrb_sym sym, )
 {
   /* A B    R(A) := constget(Sym(B)) */
   DPRINT_INDENT(mrb);
@@ -590,7 +569,7 @@ ENTRY_mrb(vm_constget, mrb_value, 1, mrb_sym sym)
   return mrb_vm_const_get(mrb, sym);
 }
 
-ENTRY_mrb(vm_constset, void, 2, mrb_sym sym, mrb_value value)
+ENTRY_mrb(vm_constset, void, 2, mrb_sym sym, mrb_value value, )
 {
   /* A B    constset(Sym(B),R(A)) */
   DPRINT_INDENT(mrb);
@@ -598,7 +577,7 @@ ENTRY_mrb(vm_constset, void, 2, mrb_sym sym, mrb_value value)
   mrb_vm_const_set(mrb, sym, value);
 }
 
-ENTRY_mrb(vm_getmcnst, mrb_value, 2, mrb_value recv, mrb_sym sym)
+ENTRY_mrb(vm_getmcnst, mrb_value, 2, mrb_value recv, mrb_sym sym, )
 {
   /* A B C  R(A) := R(C)::Sym(B) */
   DPRINT_INDENT(mrb);
@@ -606,7 +585,7 @@ ENTRY_mrb(vm_getmcnst, mrb_value, 2, mrb_value recv, mrb_sym sym)
   return mrb_const_get(mrb, recv, sym);
 }
 
-ENTRY_mrb(vm_setmcnst, void, 3, mrb_value recv, mrb_sym sym, mrb_value value)
+ENTRY_mrb(vm_setmcnst, void, 3, mrb_value recv, mrb_sym sym, mrb_value value, )
 {
   /* A B C  R(A+1)::Sym(B) := R(A) */
   DPRINT_INDENT(mrb);
@@ -614,7 +593,7 @@ ENTRY_mrb(vm_setmcnst, void, 3, mrb_value recv, mrb_sym sym, mrb_value value)
   mrb_const_set(mrb, recv, sym, value);
 }
 
-ENTRY_mrb(vm_getupvar, mrb_value, 2, uint32_t idx, uint32_t up)
+ENTRY_mrb(vm_getupvar, mrb_value, 2, uint32_t idx, uint32_t up, )
 {
   /* A B C  R(A) := uvget(B,C) */
   DPRINT_INDENT(mrb);
@@ -629,7 +608,7 @@ ENTRY_mrb(vm_getupvar, mrb_value, 2, uint32_t idx, uint32_t up)
   }
 }
 
-ENTRY_mrb(vm_setupvar, void, 3, uint32_t idx, uint32_t up, mrb_value value)
+ENTRY_mrb(vm_setupvar, void, 3, uint32_t idx, uint32_t up, mrb_value value, )
 {
   /* A B C  uvset(B,C,R(A)) */
   DPRINT_INDENT(mrb);
@@ -642,7 +621,7 @@ ENTRY_mrb(vm_setupvar, void, 3, uint32_t idx, uint32_t up, mrb_value value)
   }
 }
 
-ENTRY_vme(vm_hash_new, mrb_value, 2, mrb_value *array, uint32_t pairs)
+ENTRY_vme(vm_hash_new, mrb_value, 2, mrb_value *array, uint32_t pairs, )
 {
   /* A B C   R(A) := hash_new(R(B),R(B+1)..R(B+C)) */
   mrb_state *mrb = vme->mrb;
@@ -659,7 +638,7 @@ ENTRY_vme(vm_hash_new, mrb_value, 2, mrb_value *array, uint32_t pairs)
   return hash;
 }
 
-ENTRY_vme(vm_lambda, mrb_value, 2, uint32_t bz, uint32_t cm)
+ENTRY_vme(vm_lambda, mrb_value, 2, uint32_t bz, uint32_t cm, )
 {
   /* A b c  R(A) := lambda(SEQ[b],c) (b:c = 14:2) */
   mrb_state *mrb = vme->mrb;
@@ -681,7 +660,7 @@ ENTRY_vme(vm_lambda, mrb_value, 2, uint32_t bz, uint32_t cm)
   return proc;
 }
 
-ENTRY_vme(vm_newclass, mrb_value, 3, mrb_value base, mrb_sym sym, mrb_value super)
+ENTRY_vme(vm_newclass, mrb_value, 3, mrb_value base, mrb_sym sym, mrb_value super, )
 {
   /* A B    R(A) := newclass(R(A),Sym(B),R(A+1)) */
   mrb_state *mrb = vme->mrb;
@@ -699,7 +678,7 @@ ENTRY_vme(vm_newclass, mrb_value, 3, mrb_value base, mrb_sym sym, mrb_value supe
   return cls;
 }
 
-ENTRY_vme(vm_newmethod, void, 3, mrb_value base, mrb_sym sym, mrb_value closure)
+ENTRY_vme(vm_newmethod, void, 3, mrb_value base, mrb_sym sym, mrb_value closure, )
 {
   /* A B            R(A).newmethod(Sym(B),R(A+1)) */
   mrb_state *mrb = vme->mrb;
@@ -711,7 +690,7 @@ ENTRY_vme(vm_newmethod, void, 3, mrb_value base, mrb_sym sym, mrb_value closure)
   mrb_gc_arena_restore(mrb, vme->ctx->ai);
 }
 
-ENTRY_vme(vm_newmodule, mrb_value, 2, mrb_value base, mrb_sym sym)
+ENTRY_vme(vm_newmodule, mrb_value, 2, mrb_value base, mrb_sym sym, )
 {
   /* A B            R(A) := newmodule(R(A),Sym(B)) */
   mrb_state *mrb = vme->mrb;
@@ -729,14 +708,14 @@ ENTRY_vme(vm_newmodule, mrb_value, 2, mrb_value base, mrb_sym sym)
   return cls;
 }
 
-ENTRY_vme_jmp(vm_raise, void, 1, mrb_value obj)
+ENTRY_vme_jmp(vm_raise, void, 1, mrb_value obj, )
 {
   /* A       raise(R(A)) */
   vme->mrb->exc = mrb_obj_ptr(obj);
   vm_raise_exc(vme, jmp);
 }
 
-ENTRY_vme(vm_range_new, mrb_value, 3, mrb_value first, mrb_value second, uint32_t exclude)
+ENTRY_vme(vm_range_new, mrb_value, 3, mrb_value first, mrb_value second, uint32_t exclude, )
 {
   /* A B C  R(A) := range_new(R(B),R(B+1),C) */
   mrb_state *mrb = vme->mrb;
@@ -748,7 +727,7 @@ ENTRY_vme(vm_range_new, mrb_value, 3, mrb_value first, mrb_value second, uint32_
   return range;
 }
 
-ENTRY_mrb(vm_rescue, mrb_value, 1, int dummy)
+ENTRY_mrb(vm_rescue, mrb_value, 0, )
 {
   /* A      R(A) := exc; clear(exc) */
   DPRINT_INDENT(mrb);
@@ -756,7 +735,7 @@ ENTRY_mrb(vm_rescue, mrb_value, 1, int dummy)
   return mrb_obj_value(mrb->exc);
 }
 
-ENTRY_mrb(vm_rescue_pop, void, 1, uint32_t times)
+ENTRY_mrb(vm_rescue_pop, void, 1, uint32_t times, )
 {
   /* A       A.times{rescue_pop()} */
   DPRINT_INDENT(mrb);
@@ -766,7 +745,7 @@ ENTRY_mrb(vm_rescue_pop, void, 1, uint32_t times)
   }
 }
 
-ENTRY_vme_jmp(vm_rescue_push, void, 1, int32_t offset)
+ENTRY_vme_jmp(vm_rescue_push, void, 1, int32_t offset, )
 {
   /* sBx    pc+=sBx on exception */
   mrb_state *mrb = vme->mrb;
@@ -780,7 +759,7 @@ ENTRY_vme_jmp(vm_rescue_push, void, 1, int32_t offset)
   mrb->c->rescue[mrb->c->ci->ridx++] = jmp->pc + offset;
 }
 
-ENTRY_vme_jmp(vm_ret, mrb_value, 2, mrb_value v, int b)
+ENTRY_vme_jmp(vm_ret, mrb_value, 2, mrb_value v, int b, )
 {
   /* A      return R(A) */
   mrb_state *mrb = vme->mrb;
@@ -865,7 +844,7 @@ ENTRY_vme_jmp(vm_ret, mrb_value, 2, mrb_value v, int b)
   return mrb_nil_value();
 }
 
-ENTRY_vme_jmp(vm_send_array, void, 2, int a, mrb_sym mid)
+ENTRY_vme_jmp(vm_send_array, void, 2, int a, mrb_sym mid, )
 {
   /* A B C  R(A) := call(R(A),Sym(B),R(A+1),... ,R(A+C-1)) */
   mrb_state *mrb = vme->mrb;
@@ -941,7 +920,7 @@ ENTRY_vme_jmp(vm_send_array, void, 2, int a, mrb_sym mid)
   }
 }
 
-ENTRY_vme_jmp(vm_send_normal, void, 2, uint32_t n_a, mrb_sym mid)
+ENTRY_vme_jmp(vm_send_normal, void, 2, uint32_t n_a, mrb_sym mid, )
 {
   /* A B C  R(A) := call(R(A),Sym(B),R(A+1),..2 ,R(A+C-1)) */
   mrb_state *mrb = vme->mrb;
@@ -1020,7 +999,7 @@ ENTRY_vme_jmp(vm_send_normal, void, 2, uint32_t n_a, mrb_sym mid)
   }
 }
 
-ENTRY_vme(vm_singleton_class, mrb_value, 1, mrb_value base)
+ENTRY_vme(vm_singleton_class, mrb_value, 1, mrb_value base, )
 {
   /* A B    R(A) := R(B).singleton_class */
   mrb_state *mrb = vme->mrb;
@@ -1032,7 +1011,7 @@ ENTRY_vme(vm_singleton_class, mrb_value, 1, mrb_value base)
   return cls;
 }
 
-ENTRY_mrb(vm_str_cat, void, 2, mrb_value recv, mrb_value other)
+ENTRY_mrb(vm_str_cat, void, 2, mrb_value recv, mrb_value other, )
 {
   /* A B    R(A).concat(R(B)) */
   DPRINT_INDENT(mrb);
@@ -1040,7 +1019,7 @@ ENTRY_mrb(vm_str_cat, void, 2, mrb_value recv, mrb_value other)
   mrb_str_concat(mrb, recv, other);
 }
 
-ENTRY_vme(vm_str_dup, mrb_value, 1, mrb_value lit)
+ENTRY_vme(vm_str_dup, mrb_value, 1, mrb_value lit, )
 {
   /* A Bx           R(A) := str_new(Lit(Bx)) */
   mrb_state *mrb = vme->mrb;
@@ -1051,7 +1030,7 @@ ENTRY_vme(vm_str_dup, mrb_value, 1, mrb_value lit)
   return str;
 }
 
-ENTRY_vme_jmp(vm_super_array, void, 1, uint32_t a)
+ENTRY_vme_jmp(vm_super_array, void, 1, uint32_t a, )
 {
   /* A B C  R(A) := super(R(A+1),... ,R(A+C-1)) */
   mrb_state *mrb = vme->mrb;
@@ -1112,7 +1091,7 @@ ENTRY_vme_jmp(vm_super_array, void, 1, uint32_t a)
   }
 }
 
-ENTRY_vme_jmp(vm_super_normal, void, 1, uint32_t n_a)
+ENTRY_vme_jmp(vm_super_normal, void, 1, uint32_t n_a, )
 {
   /* A B C  R(A) := super(R(A+1),... ,R(A+C-1)) */
   mrb_state *mrb = vme->mrb;
@@ -1176,7 +1155,7 @@ ENTRY_vme_jmp(vm_super_normal, void, 1, uint32_t n_a)
   }
 }
 
-ENTRY_vme_jmp(vm_target_class, mrb_value, 1, int dummy)
+ENTRY_vme_jmp(vm_target_class, mrb_value, 0, )
 {
   /* A B    R(A) := target_class */
   mrb_state *mrb = vme->mrb;
@@ -1191,7 +1170,7 @@ ENTRY_vme_jmp(vm_target_class, mrb_value, 1, int dummy)
   return mrb_obj_value(mrb->c->ci->target_class);
 }
 
-ENTRY_vme_jmp(vm_stop, mrb_value, 1, int dummy)
+ENTRY_vme_jmp(vm_stop, mrb_value, 0, )
 {
   /*        stop VM */
   mrb_state *mrb = vme->mrb;
@@ -1213,7 +1192,7 @@ ENTRY_vme_jmp(vm_stop, mrb_value, 1, int dummy)
   return jmp->regs[vmc->irep->nlocals];
 }
 
-ENTRY_vme_jmp(vm_runtime_err, void, 1, mrb_value msg)
+ENTRY_vme_jmp(vm_runtime_err, void, 1, mrb_value msg, )
 {
   /* A Bx    raise RuntimeError with message Lit(Bx) */
   mrb_state *mrb = vme->mrb;
@@ -1221,7 +1200,7 @@ ENTRY_vme_jmp(vm_runtime_err, void, 1, mrb_value msg)
   vm_raise_exc(vme, jmp);
 }
 
-ENTRY_vme_jmp(vm_localjump_err, void, 1, mrb_value msg)
+ENTRY_vme_jmp(vm_localjump_err, void, 1, mrb_value msg, )
 {
   /* A Bx    raise LocalJumpError with message Lit(Bx) */
   mrb_state *mrb = vme->mrb;
@@ -1335,8 +1314,7 @@ NAKED vm_epilogue(void)
   );
 }
 
-static void
-vm_raise_exc(mrb_vm_env *vme, vm_jmpinfo *jmp)
+ENTRY_vme_jmp(vm_raise_exc, void, 0, )
 {
   mrb_state *mrb = vme->mrb;
   mrb_vm_context *vmc = vme->ctx;
@@ -1349,7 +1327,7 @@ vm_raise_exc(mrb_vm_env *vme, vm_jmpinfo *jmp)
   eidx = ci->eidx;
   if (ci == mrb->c->cibase) {
     if (ci->ridx == 0) {
-      vm_stop(0, vme, jmp);
+      vm_stop(vme, jmp);
       return;
     }
     goto L_RESCUE;
@@ -1371,7 +1349,7 @@ vm_raise_exc(mrb_vm_env *vme, vm_jmpinfo *jmp)
     if (ci == mrb->c->cibase) {
       if (ci->ridx == 0) {
         jmp->regs = mrb->c->stack = mrb->c->stbase;
-        vm_stop(0, vme, jmp);
+        vm_stop(vme, jmp);
         return;
       }
       break;
@@ -1383,6 +1361,12 @@ L_RESCUE:
   vmc->syms = vmc->irep->syms;
   jmp->regs = mrb->c->stack = mrb->c->stbase + ci[1].stackidx;
   jmp->pc = mrb->c->rescue[--ci->ridx];
+}
+
+mrb_code *
+mrb_vm_raise_handler(void)
+{
+  return vm_raise_exc_entry;
 }
 
 uint8_t readb(void *address)
