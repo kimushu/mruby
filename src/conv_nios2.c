@@ -864,8 +864,8 @@ convert_iseq(convert_scope *s)
     case OP_RANGE:
       /* A B C   R(A) := range_new(R(B),R(B+1),C) (C=0:'..', C=1:'...') */
       allocseq(s, 6);
-      genop(s, NIOS2_addi(4, GETARG_B(i)*4, NIOS2_STACK_REG));
-      genop(s, NIOS2_addi(5, (GETARG_B(i)+1)*4, NIOS2_STACK_REG));
+      genop(s, NIOS2_ldw(4, GETARG_B(i)*4, NIOS2_STACK_REG));
+      genop(s, NIOS2_ldw(5, (GETARG_B(i)+1)*4, NIOS2_STACK_REG));
       genop(s, NIOS2_movui(6, GETARG_C(i)));
       genop(s, NIOS2_ldw(2, ENV(range_new), NIOS2_VMENV_REG));
       genop(s, NIOS2_callr(2));
