@@ -86,3 +86,7 @@ end
 #   conf.test_runner.command = 'env'
 #
 # end
+
+MRuby::CrossBuild.new('nios2') do |conf|
+  toolchain :nios2
+end
