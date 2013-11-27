@@ -326,3 +326,9 @@ mrb_final_mrbgems(mrb_state *mrb)
 {
 }
 #endif
+#ifdef __NIOS2__
+void
+_mcount(void)
+{
+}
+#endif

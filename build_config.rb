@@ -89,4 +89,6 @@ end
 
 MRuby::CrossBuild.new('nios2') do |conf|
   toolchain :nios2
+  conf.cc.flags << "-pg"
+  conf.linker.flags << "-pg"
 end
