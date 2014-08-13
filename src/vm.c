@@ -687,6 +687,8 @@ argnum_error(mrb_state *mrb, mrb_int num)
 
 #if defined __GNUC__ || defined __clang__ || defined __INTEL_COMPILER
 #define DIRECT_THREADED
+#elif defined(ENABLE_RUBIC)
+#error rubic requires DIRECT_THREADED
 #endif
 
 #ifndef DIRECT_THREADED
@@ -701,8 +703,13 @@ argnum_error(mrb_state *mrb, mrb_int num)
 
 #define INIT_DISPATCH JUMP; return mrb_nil_value();
 #define CASE(op) L_ ## op:
+#ifndef ENABLE_RUBIC
 #define NEXT i=*++pc; CODE_FETCH_HOOK(mrb, irep, pc, regs); goto *optable[GET_OPCODE(i)]
 #define JUMP i=*pc; CODE_FETCH_HOOK(mrb, irep, pc, regs); goto *optable[GET_OPCODE(i)]
+#else   /* ENABLE_RUBIC */
+#define NEXT ++pc; JUMP
+#define JUMP goto rubic_jump
+#endif  /* ENABLE_RUBIC */
 
 #define END_DISPATCH
 
@@ -719,9 +726,16 @@ mrb_context_run(mrb_state *mrb, struct RProc *proc, mrb_value self, unsigned int
   /* mrb_assert(mrb_proc_cfunc_p(proc)) */
   mrb_irep *irep = proc->body.irep;
   mrb_code *pc = irep->iseq;
+#ifndef ENABLE_RUBIC
   mrb_value *pool = irep->pool;
   mrb_sym *syms = irep->syms;
   mrb_value *regs = NULL;
+#else
+  register mrb_state *_mrb asm (RUBIC_REG_STATE) = NULL;
+  register mrb_value *pool asm (RUBIC_REG_LITERAL) = irep->pool;
+  register mrb_sym   *syms asm (RUBIC_REG_SYMBOL) = irep->syms;
+  register mrb_value *regs asm (RUBIC_REG_STACK) = NULL;
+#endif
   mrb_code i;
   int ai = mrb_gc_arena_save(mrb);
   struct mrb_jmpbuf *prev_jmp = mrb->jmp;
@@ -770,6 +784,21 @@ RETRY_TRY_BLOCK:
   mrb->c->ci->nregs = irep->nregs;
   regs = mrb->c->stack;
   regs[0] = self;
+
+#ifdef ENABLE_RUBIC
+  _mrb = mrb;
+rubic_jump:
+  if(mrb->rubic_state.enabled) {
+    struct rubic_result ret;
+    ret = rubic_enter(rubic_r2n(_mrb, pc));
+    pc = rubic_n2r(_mrb, ret.next);
+    i = ret.inst ? ret.inst : *pc;
+  }
+  else {
+    i = *pc;
+  }
+  goto *optable[GET_OPCODE(i)];
+#endif
 
   INIT_DISPATCH {
     CASE(OP_NOP) {

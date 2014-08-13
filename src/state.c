@@ -11,6 +11,10 @@
 #include "mruby/variable.h"
 #include "mruby/debug.h"
 #include "mruby/string.h"
+#ifdef ENABLE_RUBIC
+#include "mruby/rubic.h"
+void (*mrb_open_rubic)(rubic_state *);
+#endif
 
 void mrb_init_heap(mrb_state*);
 void mrb_init_core(mrb_state*);
@@ -43,6 +47,15 @@ mrb_open_core(mrb_allocf f, void *ud)
   mrb->arena_capa = MRB_GC_ARENA_SIZE;
 #endif
 
+#ifdef ENABLE_RUBIC
+  memset(&mrb->rubic_state, 0, sizeof(mrb->rubic_state));
+  if(mrb_open_rubic) {
+    mrb_open_rubic(&mrb->rubic_state);
+    if(mrb->rubic_state.enabled) {
+      mrb_init_rubic(mrb);
+    }
+  }
+#endif
   mrb_init_heap(mrb);
   mrb->c = (struct mrb_context*)mrb_malloc(mrb, sizeof(struct mrb_context));
   *mrb->c = mrb_context_zero;
@@ -123,6 +136,11 @@ void mrb_free_heap(mrb_state *mrb);
 void
 mrb_irep_incref(mrb_state *mrb, mrb_irep *irep)
 {
+#ifdef ENABLE_RUBIC
+  if(irep->refcnt == 0) {
+    rubic_flush_icache(mrb, irep);
+  }
+#endif
   irep->refcnt++;
 }
 

@@ -83,6 +83,27 @@ MRuby::Build.new do |conf|
   # conf.enable_bintest
 end
 
+MRuby::CrossBuild.new('nios2-rubic') do |conf|
+  toolchain :nios2
+
+  conf.cc.flags << "-DMRB_WORD_BOXING=1 -O2 -DENABLE_RUBIC"
+  conf.cc.flags << "-mno-hw-div"
+  # conf.cc.flags << "-mno-hw-mul"
+  # conf.cc.flags << "-mno-hw-mulx"
+  # conf.linker.flags << "-m32"
+
+  conf.build_mrbtest_lib_only
+
+  conf.gem 'mrbgems/mruby-bin-mirb' do |gem|
+    gem.cc.defines << "main=mirb_main"
+    gem.bins = []
+  end
+  conf.libmruby << objfile("#{build_dir}/mrbgems/mruby-bin-mirb/tools/mirb/mirb")
+
+  # conf.test_runner.command = 'env'
+
+end
+
 # Define cross build settings
 # MRuby::CrossBuild.new('32bit') do |conf|
 #   toolchain :gcc

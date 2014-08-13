@@ -108,6 +108,10 @@ struct mrb_jmpbuf;
 
 typedef void (*mrb_atexit_func)(struct mrb_state*);
 
+#if defined(ENABLE_RUBIC)
+#include "mruby/rubic.h"
+#endif
+
 typedef struct mrb_state {
   struct mrb_jmpbuf *jmp;
 
@@ -177,6 +181,10 @@ typedef struct mrb_state {
   struct RObject *nomem_err;              /* pre-allocated NoMemoryError */
 
   void *ud; /* auxiliary data */
+
+#if defined(ENABLE_RUBIC)
+  rubic_state rubic_state;
+#endif
 
 #ifdef MRB_FIXED_STATE_ATEXIT_STACK
   mrb_atexit_func atexit_stack[MRB_FIXED_STATE_ATEXIT_STACK_SIZE];
