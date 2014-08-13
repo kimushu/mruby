@@ -80,7 +80,7 @@ gettimeofday(struct timeval *tv, void *tz)
     t.u64 -= UI64(116444736000000000);  /* Unix epoch bias */
     t.u64 /= 10;                      /* to microseconds */
     tv->tv_sec = (time_t)(t.u64 / (1000 * 1000));
-    tv->tv_usec = t.u64 % 1000 * 1000;
+    tv->tv_usec = t.u64 % (1000 * 1000);
   }
   return 0;
 }
@@ -673,6 +673,11 @@ mrb_time_to_i(mrb_state *mrb, mrb_value self)
   struct mrb_time *tm;
 
   tm = DATA_GET_PTR(mrb, self, &mrb_time_type, struct mrb_time);
+#ifdef MRB_INT16
+  if (tm->sec > MRB_INT_MAX || tm->sec < MRB_INT_MIN) {
+    return mrb_float_value(mrb, (mrb_float)tm->sec);
+  }
+#endif
   return mrb_fixnum_value((mrb_int)tm->sec);
 }
 
@@ -684,6 +689,11 @@ mrb_time_usec(mrb_state *mrb, mrb_value self)
   struct mrb_time *tm;
 
   tm = DATA_GET_PTR(mrb, self, &mrb_time_type, struct mrb_time);
+#ifdef MRB_INT16
+  if (tm->usec > MRB_INT_MAX || tm->usec < MRB_INT_MIN) {
+    return mrb_float_value(mrb, (mrb_float)tm->usec);
+  }
+#endif
   return mrb_fixnum_value((mrb_int)tm->usec);
 }
 
