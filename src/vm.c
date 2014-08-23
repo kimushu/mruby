@@ -767,6 +767,9 @@ mrb_context_run(mrb_state *mrb, struct RProc *proc, mrb_value self, unsigned int
 #endif
 
   mrb_bool exc_catched = FALSE;
+#ifdef ENABLE_RUBIC
+  _mrb = mrb;
+#endif
 RETRY_TRY_BLOCK:
 
   MRB_TRY(&c_jmp) {
@@ -786,7 +789,6 @@ RETRY_TRY_BLOCK:
   regs[0] = self;
 
 #ifdef ENABLE_RUBIC
-  _mrb = mrb;
 rubic_jump:
   if(mrb->rubic_state.enabled) {
     struct rubic_result ret;
