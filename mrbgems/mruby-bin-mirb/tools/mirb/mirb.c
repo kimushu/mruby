@@ -313,7 +313,9 @@ main(int argc, char **argv)
   int last_char;
   int char_index;
 #else
+#ifndef DISABLE_READLINE_HISTORY_SAVE
   char *history_path;
+#endif
 #endif
   mrbc_context *cxt;
   struct mrb_parser_state *parser;
@@ -341,15 +343,19 @@ main(int argc, char **argv)
   }
 
 #ifdef ENABLE_READLINE
+#ifndef DISABLE_READLINE_HISTORY_SAVE
   history_path = get_history_path(mrb);
   if (history_path == NULL) {
     fputs("failed to get history path\n", stderr);
     mrb_close(mrb);
     return EXIT_FAILURE;
   }
+#endif
 
   MIRB_USING_HISTORY();
+#ifndef DISABLE_READLINE_HISTORY_SAVE
   MIRB_READ_HISTORY(history_path);
+#endif
 #endif
 
   print_hint();
@@ -464,8 +470,10 @@ main(int argc, char **argv)
   }
 
 #ifdef ENABLE_READLINE
+#ifndef DISABLE_READLINE_HISTORY_SAVE
   MIRB_WRITE_HISTORY(history_path);
   mrb_free(mrb, history_path);
+#endif
 #endif
 
   mrbc_context_free(mrb, cxt);

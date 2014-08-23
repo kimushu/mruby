@@ -86,18 +86,21 @@ end
 MRuby::CrossBuild.new('nios2-rubic') do |conf|
   toolchain :nios2
 
+  # conf.cc.include_paths << "#{root}/linenoise"
   conf.cc.flags << "-O2"
   conf.cc.defines << "MRB_WORD_BOXING=1"
   conf.cc.defines << "ENABLE_RUBIC=1"
+  conf.cc.defines << "DISABLE_READLINE_HISTORY_SAVE=1"
   conf.cc.flags << "-mno-hw-div"
   # conf.cc.flags << "-mno-hw-mul"
   # conf.cc.flags << "-mno-hw-mulx"
 
-  # conf.build_mrbtest_lib_only
+  conf.build_mrbtest_lib_only
 
   conf.gem 'mrbgems/mruby-print'
   conf.gem 'mrbgems/embed-hardware'
   conf.gem 'mrbgems/enjoy-rubicle'
+  conf.gem 'mrbgems/board-de0'
 
   conf.gem 'mrbgems/mruby-bin-mirb' do |gem|
     gem.cc.defines << "main=mirb_main"
