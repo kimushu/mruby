@@ -86,7 +86,7 @@ end
 MRuby::CrossBuild.new('nios2-rubic') do |conf|
   toolchain :nios2
 
-  # conf.cc.include_paths << "#{root}/linenoise"
+  conf.cc.include_paths << "#{root}/linenoise"
   conf.cc.flags << "-O2"
   conf.cc.defines << "MRB_WORD_BOXING=1"
   conf.cc.defines << "ENABLE_RUBIC=1"
