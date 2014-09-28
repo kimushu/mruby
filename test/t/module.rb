@@ -5,10 +5,6 @@ assert('Module', '15.2.2') do
   assert_equal Class, Module.class
 end
 
-assert('Module superclass', '15.2.2.2') do
-  assert_equal Object, Module.superclass
-end
-
 # TODO not implemented ATM assert('Module.constants', '15.2.2.3.1') do
 
 # TODO not implemented ATM assert('Module.nesting', '15.2.2.3.2') do
@@ -83,7 +79,7 @@ assert('Module#attr', '15.2.2.4.11') do
   assert_true AttrTest.respond_to?(:cattr)
   assert_true test.respond_to?(:iattr)
 
-  assert_false AttrTest.respond_to?(:vattr=)
+  assert_false AttrTest.respond_to?(:cattr=)
   assert_false test.respond_to?(:iattr=)
 
   test.iattr_val = 'test'
@@ -254,7 +250,7 @@ assert('Module#const_get', '15.2.2.4.21') do
   assert_equal 42, Test4ConstGet.const_get(:Const4Test4ConstGet)
 end
 
-assert('Module.const_missing', '15.2.2.4.22') do
+assert('Module#const_missing', '15.2.2.4.22') do
   module Test4ConstMissing
     def self.const_missing(sym)
       42 # the answer to everything
@@ -273,19 +269,19 @@ assert('Module#const_get', '15.2.2.4.23') do
   assert_equal 23, Test4ConstSet.const_get(:Const4Test4ConstSet)
 end
 
-assert('Module.constants', '15.2.2.4.24') do
+assert('Module#constants', '15.2.2.4.24') do
   $n = []
   module TestA
-    Const = 1
+    C = 1
   end
   class TestB
     include TestA
-    Const2 = 1
+    C2 = 1
     $n = constants.sort
   end
 
-  assert_equal [ :Const ], TestA.constants
-  assert_equal [ :Const, :Const2 ], $n
+  assert_equal [ :C ], TestA.constants
+  assert_equal [ :C, :C2 ], $n
 end
 
 assert('Module#include', '15.2.2.4.27') do
@@ -338,6 +334,15 @@ assert('Module#included_modules', '15.2.2.4.30') do
 
   assert_equal Array, r.class
   assert_true r.include?(Test4includedModules)
+end
+
+assert('Module#initialize', '15.2.2.4.31') do
+  assert_kind_of Module, Module.new
+  mod = Module.new { def hello; "hello"; end }
+  assert_equal [:hello], mod.instance_methods
+  a = nil
+  mod = Module.new { |m| a = m }
+  assert_equal mod, a
 end
 
 assert('Module#instance_methods', '15.2.2.4.33') do
@@ -444,7 +449,7 @@ assert('Module#remove_method', '15.2.2.4.41') do
   assert_false Test4RemoveMethod::Child.instance_methods(false).include? :hello
 end
 
-assert('Module.undef_method', '15.2.2.4.42') do
+assert('Module#undef_method', '15.2.2.4.42') do
   module Test4UndefMethod
     class Parent
       def hello
@@ -485,21 +490,45 @@ end
 assert('Issue 1467') do
   module M1
     def initialize()
-      super() 
+      super()
     end
   end
 
-  class C1  
-    include M1 
-     def initialize() 
-       super() 
+  class C1
+    include M1
+     def initialize()
+       super()
      end
   end
 
   class C2
-    include M1 
+    include M1
   end
 
   C1.new
   C2.new
 end
+
+assert('clone Module') do
+  module M1
+    def foo
+      true
+    end
+  end
+
+  class B
+    include M1.clone
+  end
+
+  B.new.foo
+end
+
+assert('Module#module_function') do
+  module M
+    def modfunc; end
+    module_function :modfunc
+  end
+
+  assert_true M.respond_to?(:modfunc)
+end
+
