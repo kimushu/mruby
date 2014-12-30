@@ -363,6 +363,31 @@ mrb_define_method_vm(mrb_state *mrb, struct RClass *c, mrb_sym name, mrb_value b
   }
 }
 
+/* a function to raise NotImplementedError with current method name */
+MRB_API void
+mrb_notimplement(mrb_state *mrb)
+{
+  const char *str;
+  mrb_int len;
+  mrb_callinfo *ci = mrb->c->ci;
+
+  if (ci->mid) {
+    str = mrb_sym2name_len(mrb, ci->mid, &len);
+    mrb_raisef(mrb, E_NOTIMP_ERROR,
+      "%S() function is unimplemented on this machine",
+      mrb_str_new_static(mrb, str, (size_t)len));
+  }
+}
+
+/* a function to be replacement of unimplemented method */
+MRB_API mrb_value
+mrb_notimplement_m(mrb_state *mrb, mrb_value self)
+{
+  mrb_notimplement(mrb);
+  /* not reached */
+  return mrb_nil_value();
+}
+
 static mrb_value
 check_type(mrb_state *mrb, mrb_value val, enum mrb_vtype t, const char *c, const char *m)
 {
@@ -1047,7 +1072,7 @@ mrb_method_search(mrb_state *mrb, struct RClass* c, mrb_sym mid)
   m = mrb_method_search_vm(mrb, &c, mid);
   if (!m) {
     mrb_value inspect = mrb_funcall(mrb, mrb_obj_value(c), "inspect", 0);
-    if (RSTRING_LEN(inspect) > 64) {
+    if (mrb_string_p(inspect) && RSTRING_LEN(inspect) > 64) {
       inspect = mrb_any_to_s(mrb, mrb_obj_value(c));
     }
     mrb_name_error(mrb, mid, "undefined method '%S' for class %S",
@@ -1299,7 +1324,7 @@ mrb_bob_missing(mrb_state *mrb, mrb_value mod)
   }
   else if (mrb_respond_to(mrb, mod, inspect) && mrb->c->ci - mrb->c->cibase < 64) {
     repr = mrb_funcall_argv(mrb, mod, inspect, 0, 0);
-    if (RSTRING_LEN(repr) > 64) {
+    if (mrb_string_p(repr) && RSTRING_LEN(repr) > 64) {
       repr = mrb_any_to_s(mrb, mod);
     }
   }

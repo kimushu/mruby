@@ -181,6 +181,7 @@ class String
         ed = arg1.end
         beg += self.size if beg < 0
         ed += self.size if ed < 0
+        ed -= 1 if arg1.exclude_end?
         validated = true
       elsif arg1.kind_of?(String)
         validated = true
@@ -198,22 +199,49 @@ class String
     unless str == nil || str == ""
       if arg1 != nil && arg2 !=nil
         idx = arg1 >= 0 ? arg1 : self.size+arg1
-        str2 = self[0...idx] + self[idx+arg2..-1]
+        str2 = self[0...idx] + self[idx+arg2..-1].to_s
       else
         if arg1.kind_of?(Range)
           idx = beg >= 0 ? beg : self.size+beg
           idx2 = ed>= 0 ? ed : self.size+ed
-          str2 = self[0...idx] + self[idx2+1..-1]
+          str2 = self[0...idx] + self[idx2+1..-1].to_s
         elsif arg1.kind_of?(String)
           idx = self.index(arg1)
           str2 = self[0...idx] + self[idx+arg1.size..-1] unless idx == nil
         else
           idx = arg1 >= 0 ? arg1 : self.size+arg1
-          str2 = self[0...idx] + self[idx+1..-1]
+          str2 = self[0...idx] + self[idx+1..-1].to_s
         end
       end
       self.replace(str2) unless str2 == nil
     end
     str
+  end
+
+  ##
+  #  call-seq:
+  #     str.insert(index, other_str)   -> str
+  #
+  #  Inserts <i>other_str</i> before the character at the given
+  #  <i>index</i>, modifying <i>str</i>. Negative indices count from the
+  #  end of the string, and insert <em>after</em> the given character.
+  #  The intent is insert <i>aString</i> so that it starts at the given
+  #  <i>index</i>.
+  #
+  #     "abcd".insert(0, 'X')    #=> "Xabcd"
+  #     "abcd".insert(3, 'X')    #=> "abcXd"
+  #     "abcd".insert(4, 'X')    #=> "abcdX"
+  #     "abcd".insert(-3, 'X')   #=> "abXcd"
+  #     "abcd".insert(-1, 'X')   #=> "abcdX"
+  #
+  def insert(idx, str)
+    pos = idx.to_i
+    pos += self.size + 1 if pos < 0
+
+    raise IndexError, "index #{idx.to_i} out of string" if pos < 0 || pos > self.size
+
+    return self + str if pos == -1
+    return str + self if pos == 0
+    return self[0..pos - 1] + str + self[pos..-1]
   end
 end

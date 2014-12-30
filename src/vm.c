@@ -1080,12 +1080,7 @@ RETRY_TRY_BLOCK:
       ci->mid = mid;
       ci->proc = m;
       ci->stackent = mrb->c->stack;
-      if (c->tt == MRB_TT_ICLASS) {
-        ci->target_class = c->c;
-      }
-      else {
-        ci->target_class = c;
-      }
+      ci->target_class = c;
 
       ci->pc = pc + 1;
       ci->acc = a;
@@ -1250,7 +1245,12 @@ RETRY_TRY_BLOCK:
       mrb->c->stack[0] = recv;
 
       if (MRB_PROC_CFUNC_P(m)) {
-        ci->nregs = 0;
+        if (n == CALL_MAXARGS) {
+          ci->nregs = 3;
+        }
+        else {
+          ci->nregs = n + 2;
+        }
         mrb->c->stack[0] = m->body.func(mrb, recv);
         mrb_gc_arena_restore(mrb, ai);
         if (mrb->exc) goto L_RAISE;
@@ -2123,12 +2123,12 @@ RETRY_TRY_BLOCK:
         }
         else {
           regs[a++] = mrb_ary_new_capa(mrb, 0);
-          for (idx=0; idx+pre<len; i++) {
-            regs[a+i] = ary->ptr[pre+idx];
+          for (idx=0; idx+pre<len; idx++) {
+            regs[a+idx] = ary->ptr[pre+idx];
           }
           while (idx < post) {
             SET_NIL_VALUE(regs[a+idx]);
-            i++;
+            idx++;
           }
         }
       }

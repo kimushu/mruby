@@ -165,7 +165,9 @@ typedef struct mrb_state {
   struct alloca_header *mems;
 
   mrb_sym symidx;
-  struct kh_n2s *name2sym;      /* symbol table */
+  struct kh_n2s *name2sym;      /* symbol hash */
+  struct symbol_name *symtbl;   /* symbol table */
+  size_t symcapa;
 
 #ifdef ENABLE_DEBUG
   void (*code_fetch_hook)(struct mrb_state* mrb, struct mrb_irep *irep, mrb_code *pc, mrb_value *regs);
@@ -219,6 +221,7 @@ MRB_API struct RClass * mrb_class_get(mrb_state *mrb, const char *name);
 MRB_API struct RClass * mrb_class_get_under(mrb_state *mrb, struct RClass *outer, const char *name);
 MRB_API struct RClass * mrb_module_get(mrb_state *mrb, const char *name);
 MRB_API struct RClass * mrb_module_get_under(mrb_state *mrb, struct RClass *outer, const char *name);
+MRB_API mrb_value mrb_notimplement_m(mrb_state*, mrb_value);
 
 MRB_API mrb_value mrb_obj_dup(mrb_state *mrb, mrb_value obj);
 MRB_API mrb_value mrb_check_to_integer(mrb_state *mrb, mrb_value val, const char *method);
@@ -314,6 +317,7 @@ MRB_API mrb_sym mrb_obj_to_sym(mrb_state *mrb, mrb_value name);
 MRB_API mrb_bool mrb_obj_eq(mrb_state*, mrb_value, mrb_value);
 MRB_API mrb_bool mrb_obj_equal(mrb_state*, mrb_value, mrb_value);
 MRB_API mrb_bool mrb_equal(mrb_state *mrb, mrb_value obj1, mrb_value obj2);
+MRB_API mrb_value mrb_convert_to_integer(mrb_state *mrb, mrb_value val, int base);
 MRB_API mrb_value mrb_Integer(mrb_state *mrb, mrb_value val);
 MRB_API mrb_value mrb_Float(mrb_state *mrb, mrb_value val);
 MRB_API mrb_value mrb_inspect(mrb_state *mrb, mrb_value obj);
@@ -355,6 +359,8 @@ MRB_API mrb_value mrb_obj_clone(mrb_state *mrb, mrb_value self);
 #define ISALPHA(c) (ISASCII(c) && isalpha((int)(unsigned char)(c)))
 #define ISDIGIT(c) (ISASCII(c) && isdigit((int)(unsigned char)(c)))
 #define ISXDIGIT(c) (ISASCII(c) && isxdigit((int)(unsigned char)(c)))
+#define ISBLANK(c) (ISASCII(c) && ((c) == ' ' || (c) == '\t'))
+#define ISCNTRL(c) (ISASCII(c) && iscntrl((int)(unsigned char)(c)))
 #define TOUPPER(c) (ISASCII(c) ? toupper((int)(unsigned char)(c)) : (c))
 #define TOLOWER(c) (ISASCII(c) ? tolower((int)(unsigned char)(c)) : (c))
 #endif

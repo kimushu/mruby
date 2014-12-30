@@ -187,15 +187,18 @@ mrb_f_block_given_p_m(mrb_state *mrb, mrb_value self)
   else {
     /* block_given? called within block; check upper scope */
     if (ci->proc->env && ci->proc->env->stack) {
-      given_p = !(ci->proc->env->stack == mrb->c->stbase ||
-                  mrb_nil_p(ci->proc->env->stack[1]));
+      mrb_value *sp = ci->proc->env->stack;
+
+      /* top-level does not have block slot (alway false) */
+      if (sp == mrb->c->stbase)
+        return mrb_false_value();
+      ci = mrb->c->cibase + ci->proc->env->cioff;
+      bp = ci[1].stackent + 1;
     }
-    else {
-      if (ci->argc > 0) {
-        bp += ci->argc;
-      }
-      given_p = !mrb_nil_p(*bp);
+    if (ci->argc > 0) {
+      bp += ci->argc;
     }
+    given_p = !mrb_nil_p(*bp);
   }
 
   return mrb_bool_value(given_p);
@@ -614,7 +617,7 @@ method_entry_loop(mrb_state *mrb, struct RClass* klass, khash_t(st)* set)
   khash_t(mt) *h = klass->mt;
   if (!h) return;
   for (i=0;i<kh_end(h);i++) {
-    if (kh_exist(h, i)) {
+    if (kh_exist(h, i) && kh_value(h, i)) {
       kh_put(st, mrb, set, kh_key(h, i));
     }
   }
