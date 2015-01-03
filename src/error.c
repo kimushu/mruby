@@ -239,7 +239,7 @@ mrb_vformat(mrb_state *mrb, const char *format, va_list ap)
       if (*p == 'S') {
         size = p - b - 1;
         mrb_ary_push(mrb, ary, mrb_str_new(mrb, b, size));
-        mrb_ary_push(mrb, ary, va_arg(ap, mrb_value));
+        mrb_ary_push(mrb, ary, va_arg_mrb_value(ap));
         b = p + 1;
       }
     }

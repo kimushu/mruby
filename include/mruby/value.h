@@ -234,4 +234,16 @@ mrb_ro_data_p(const char *p)
 # define mrb_ro_data_p(p) FALSE
 #endif
 
+#if defined(__EMSCRIPTEN__) && defined(MRB_WORD_BOXING)
+# include <stdarg.h>
+static inline mrb_value va_arg_mrb_value(va_list args)
+{
+  mrb_value v;
+  v.w = va_arg(args, unsigned long);
+  return v;
+}
+#else
+# define va_arg_mrb_value(args) va_arg(args, mrb_value)
+#endif
+
 #endif  /* MRUBY_VALUE_H */

@@ -303,7 +303,7 @@ mrb_funcall(mrb_state *mrb, mrb_value self, const char *name, mrb_int argc, ...)
 
   va_start(ap, argc);
   for (i = 0; i < argc; i++) {
-    argv[i] = va_arg(ap, mrb_value);
+    argv[i] = va_arg_mrb_value(ap);
   }
   va_end(ap);
   return mrb_funcall_argv(mrb, self, mid, argc, argv);
