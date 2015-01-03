@@ -103,6 +103,7 @@ MRuby::Build.new('host-debug') do |conf|
 
   # Generate mruby debugger command (require mruby-eval)
   conf.gem :core => "mruby-bin-debugger"
+  conf.gem 'mrbgems/mruby-eval'
 
   # bintest
   # conf.enable_bintest
@@ -122,3 +123,10 @@ end
 #   conf.test_runner.command = 'env'
 #
 # end
+MRuby::CrossBuild.new('emscripten') do |conf|
+  toolchain :emscripten
+  conf.cc.defines << "MRB_WORD_BOXING"
+  conf.gem 'mrbgems/mruby-print'
+  conf.gem 'mrbgems/mruby-bin-mirb'
+  # conf.build_mrbtest_lib_only
+end
