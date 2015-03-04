@@ -5580,7 +5580,9 @@ load_exec(mrb_state *mrb, parser_state *p, mrbc_context *c)
     return mrb_undef_value();
   }
   if (c) {
+#ifndef DISABLE_CODEDUMP
     if (c->dump_result) mrb_codedump_all(mrb, proc);
+#endif
     if (c->no_exec) return mrb_obj_value(proc);
     if (c->target_class) {
       target = c->target_class;

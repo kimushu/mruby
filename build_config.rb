@@ -122,3 +122,17 @@ end
 #   conf.test_runner.command = 'env'
 #
 # end
+MRuby::CrossBuild.new('nios2-peridot') do |conf|
+  toolchain :gcc
+  [conf.cc, conf.objc, conf.asm, conf.linker].each do |cc|
+    cc.command = 'nios2-elf-gcc'
+  end
+  conf.cxx.command = 'nios2-elf-g++'
+
+  conf.cc.defines << "MRB_WORD_BOXING"
+  conf.cc.defines << "DISABLE_CODEDUMP"
+  conf.gem 'mrbgems/embed-hardware'
+  conf.gem 'mrbgems/embed-altera'
+  conf.gem 'mrbgems/board-peridot'
+  conf.build_mrbtest_lib_only
+end
