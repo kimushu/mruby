@@ -122,7 +122,7 @@ end
 #   conf.test_runner.command = 'env'
 #
 # end
-MRuby::CrossBuild.new('nios2-peridot') do |conf|
+MRuby::CrossBuild.new('nios2-rubic') do |conf|
   toolchain :gcc
   [conf.cc, conf.objc, conf.asm, conf.linker].each do |cc|
     cc.command = 'nios2-elf-gcc'
