@@ -131,8 +131,8 @@ MRuby::CrossBuild.new('nios2-peridot') do |conf|
 
   conf.cc.defines << "MRB_WORD_BOXING"
   conf.cc.defines << "DISABLE_CODEDUMP"
-  conf.gem 'mrbgems/embed-hardware'
-  conf.gem 'mrbgems/embed-altera'
-  conf.gem 'mrbgems/board-peridot'
+  conf.gem :github => 'kimushu/mruby-sleep'
+  conf.gem :github => 'kimushu/mruby-altera'
+  conf.gem :github => 'kimushu/mruby-board-peridot'
   conf.build_mrbtest_lib_only
 end
