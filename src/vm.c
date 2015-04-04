@@ -679,9 +679,15 @@ argnum_error(mrb_state *mrb, mrb_int num)
 #define ERR_PC_SET(mrb, pc) mrb->c->ci->err = pc;
 #define ERR_PC_CLR(mrb)     mrb->c->ci->err = 0;
 #ifdef ENABLE_DEBUG
-#define CODE_FETCH_HOOK(mrb, irep, pc, regs) if ((mrb)->code_fetch_hook) (mrb)->code_fetch_hook((mrb), (irep), (pc), (regs));
+#define CODE_FETCH_HOOK(mrb, irep, pc, regs) *(pc); if ((mrb)->code_fetch_hook) (mrb)->code_fetch_hook((mrb), (irep), (pc), (regs));
+#elif defined(CODE_FETCH_HOOK)
+mrb_code __attribute__((weak))
+CODE_FETCH_HOOK(mrb_state *mrb, mrb_irep *irep, mrb_code *pc, mrb_value *regs)
+{
+  return *pc;
+}
 #else
-#define CODE_FETCH_HOOK(mrb, irep, pc, regs)
+#define CODE_FETCH_HOOK(mrb, irep, pc, regs) *(pc)
 #endif
 
 #if defined __GNUC__ || defined __clang__ || defined __INTEL_COMPILER
@@ -690,7 +696,7 @@ argnum_error(mrb_state *mrb, mrb_int num)
 
 #ifndef DIRECT_THREADED
 
-#define INIT_DISPATCH for (;;) { i = *pc; CODE_FETCH_HOOK(mrb, irep, pc, regs); switch (GET_OPCODE(i)) {
+#define INIT_DISPATCH for (;;) { i = CODE_FETCH_HOOK(mrb, irep, pc, regs); switch (GET_OPCODE(i)) {
 #define CASE(op) case op:
 #define NEXT pc++; break
 #define JUMP break
@@ -700,8 +706,8 @@ argnum_error(mrb_state *mrb, mrb_int num)
 
 #define INIT_DISPATCH JUMP; return mrb_nil_value();
 #define CASE(op) L_ ## op:
-#define NEXT i=*++pc; CODE_FETCH_HOOK(mrb, irep, pc, regs); goto *optable[GET_OPCODE(i)]
-#define JUMP i=*pc; CODE_FETCH_HOOK(mrb, irep, pc, regs); goto *optable[GET_OPCODE(i)]
+#define NEXT i=CODE_FETCH_HOOK(mrb, irep, ++pc, regs); goto *optable[GET_OPCODE(i)]
+#define JUMP i=CODE_FETCH_HOOK(mrb, irep, pc, regs); goto *optable[GET_OPCODE(i)]
 
 #define END_DISPATCH
 
