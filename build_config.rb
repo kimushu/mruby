@@ -131,6 +131,7 @@ MRuby::CrossBuild.new('nios2-rubic') do |conf|
 
   conf.cc.defines << "MRB_WORD_BOXING"
   conf.cc.defines << "DISABLE_CODEDUMP"
+  conf.cc.defines << "CODE_FETCH_HOOK=rubic_code_fetch_hook"
   conf.gem :github => 'kimushu/mruby-sleep'
   conf.gem :github => 'kimushu/mruby-altera'
   conf.gem :github => 'kimushu/mruby-board-peridot'
