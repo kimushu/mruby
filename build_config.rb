@@ -103,6 +103,7 @@ MRuby::Build.new('host-debug') do |conf|
 
   # Generate mruby debugger command (require mruby-eval)
   conf.gem :core => "mruby-bin-debugger"
+  conf.gem "mrbgems/mruby-eval"
 
   # bintest
   # conf.enable_bintest
