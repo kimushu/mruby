@@ -126,6 +126,7 @@ end
 MRuby::CrossBuild.new('emscripten') do |conf|
   toolchain :emscripten
   conf.cc.defines << "MRB_WORD_BOXING"
+  conf.linker.flags << "-O2"
   conf.gem 'mrbgems/mruby-print'
   conf.gem 'mrbgems/mruby-bin-mirb'
   # conf.build_mrbtest_lib_only
