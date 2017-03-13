@@ -136,3 +136,16 @@ end
 #   conf.test_runner.command = 'env'
 #
 # end
+if RUBY_PLATFORM.include?("64") and !RUBY_PLATFORM.include?("darwin")
+  MRuby::CrossBuild.new("host-32bit") do |conf|
+    if ENV['VisualStudioVersion'] || ENV['VSINSTALLDIR']
+      toolchain :visualcpp
+    else
+      toolchain :gcc
+    end
+    conf.cc.flags << "-m32"
+    conf.linker.flags << "-m32"
+    enable_debug
+    conf.gem "mrbgems/mruby-bin-mrbc"
+  end
+end
