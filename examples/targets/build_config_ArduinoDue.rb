@@ -21,11 +21,16 @@ end
 MRuby::CrossBuild.new("ArduinoDue") do |conf|
   toolchain :gcc
 
-  # Mac OS X
+  # Mac OS X, Arduino IDE <= 1.5.6
   # ARDUINO_PATH = '/Applications/Arduino.app/Contents/Resources/Java'
+  # Mac OS X, Arduino IDE >= 1.5.7
+  # ARDUINO_PATH = '/Applications/Arduino.app/Contents/Java'
   # GNU Linux
   ARDUINO_PATH = '/opt/arduino'
+   # Arduino IDE <= 1.5.6
   BIN_PATH = "#{ARDUINO_PATH}/hardware/tools/g++_arm_none_eabi/bin"
+  # Arduino IDE >= 1.5.7
+  # BIN_PATH = "#{ARDUINO_PATH}/hardware/tools/gcc-arm-none-eabi-4.8.3-2014q1/bin"
   SAM_PATH = "#{ARDUINO_PATH}/hardware/arduino/sam"
   TARGET_PATH = "#{SAM_PATH}/variants/arduino_due_x"
 
@@ -41,11 +46,10 @@ MRuby::CrossBuild.new("ArduinoDue") do |conf|
 
     #configuration for low memory environment
     cc.defines << %w(MRB_HEAP_PAGE_SIZE=64)
-    cc.defines << %w(MRB_USE_IV_SEGLIST)
     cc.defines << %w(KHASH_DEFAULT_SIZE=8)
     cc.defines << %w(MRB_STR_BUF_MIN_SIZE=20)
     cc.defines << %w(MRB_GC_STRESS)
-    #cc.defines << %w(DISABLE_STDIO) #if you dont need stdio.
+    #cc.defines << %w(MRB_DISABLE_STDIO) #if you dont need stdio.
     #cc.defines << %w(POOL_PAGE_SIZE=1000) #effective only for use with mruby-eval
   end
 

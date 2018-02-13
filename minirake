@@ -113,8 +113,7 @@ module MiniRake
     # Timestamp for this task.  Basic tasks return the current time for
     # their time stamp.  Other tasks can be more sophisticated.
     def timestamp
-      prerequisites = @prerequisites.collect{ |n| n.is_a?(Proc) ? n.call(name) : n }.flatten
-      prerequisites.collect { |n| Task[n].timestamp }.max || Time.now
+      Time.now
     end
 
     # Class Methods ----------------------------------------------------
@@ -237,7 +236,9 @@ module MiniRake
 
     # Time stamp for file task.
     def timestamp
-      File::stat(name.to_s).mtime
+      return Time.at(0) unless File.exist?(name)
+      stat = File::stat(name.to_s)
+      stat.directory? ? Time.at(0) : stat.mtime
     end
   end
 
@@ -254,12 +255,14 @@ module MiniRake
 
     # Declare a set of files tasks to create the given directories on
     # demand.
-    def directory(dir)
-      path = []
-      Sys.split_all(dir).each do |p|
-        path << p
-        FileTask.define_task(File.join(path)) do |t|
-          Sys.makedirs(t.name)
+    def directory(args, &block)
+      MiniRake::FileTask.define_task(args) do |t|
+        block.call(t) unless block.nil?
+        dir = args.is_a?(Hash) ? args.keys.first : args
+        (dir.split(File::SEPARATOR) + ['']).inject do |acc, part|
+          (acc + File::SEPARATOR).tap do |d|
+            Dir.mkdir(d) unless File.exists? d
+          end + part
         end
       end
     end

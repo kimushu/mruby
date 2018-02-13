@@ -32,6 +32,11 @@ assert('Kernel.eval', '15.3.1.2.3') do
     }.call
     c
   }
+  assert_equal(2) {
+    a = 10
+    Kernel.eval 'def f(a); b=a.send(:+, 1); end'
+    f(1)
+  }
 end
 
 assert('Kernel#eval', '15.3.1.3.12') do
@@ -59,6 +64,8 @@ assert('String instance_eval') do
   assert_equal(['test.rb', 10]) { obj.instance_eval('[__FILE__, __LINE__]', 'test.rb', 10)}
   assert_equal('test') { obj.instance_eval('@test') }
   assert_equal('test') { obj.instance_eval { @test } }
+  o = Object.new
+  assert_equal ['', o, o], o.instance_eval("[''].each { |s| break [s, o, self] }")
 end
 
 assert('Kernel.#eval(string) context') do
@@ -73,3 +80,22 @@ assert('Kernel.#eval(string) context') do
   assert_equal('class') { obj.const_string }
 end
 
+assert('Object#instance_eval with begin-rescue-ensure execution order') do
+  class HellRaiser
+    def raise_hell
+      order = [:enter_raise_hell]
+      begin
+        order.push :begin
+        self.instance_eval("raise 'error'")
+      rescue
+        order.push :rescue
+      ensure
+        order.push :ensure
+      end
+      order
+    end
+  end
+
+  hell_raiser = HellRaiser.new
+  assert_equal([:enter_raise_hell, :begin, :rescue, :ensure], hell_raiser.raise_hell)
+end

@@ -7,9 +7,39 @@
 #ifndef MRUBYCONF_H
 #define MRUBYCONF_H
 
+#include <limits.h>
+#include <stdint.h>
+
+/* architecture selection: */
+/* specify -DMRB_32BIT or -DMRB_64BIT to override */
+#if !defined(MRB_32BIT) && !defined(MRB_64BIT)
+#if UINT64_MAX == SIZE_MAX
+#define MRB_64BIT
+#else
+#define MRB_32BIT
+#endif
+#endif
+
+#if defined(MRB_32BIT) && defined(MRB_64BIT)
+#error Cannot build for 32 and 64 bit architecture at the same time
+#endif
+
 /* configuration options: */
 /* add -DMRB_USE_FLOAT to use float instead of double for floating point numbers */
 //#define MRB_USE_FLOAT
+
+/* exclude floating point numbers */
+//#define MRB_WITHOUT_FLOAT
+
+/* add -DMRB_METHOD_CACHE to use method cache to improve performance */
+//#define MRB_METHOD_CACHE
+/* size of the method cache (need to be the power of 2) */
+//#define MRB_METHOD_CACHE_SIZE (1<<7)
+
+/* add -DMRB_METHOD_TABLE_INLINE to reduce the size of method table */
+/* MRB_METHOD_TABLE_INLINE requires LSB of function pointers to be zero */
+/* you might need to specify --falign-functions=n (where n>1) */
+//#define MRB_METHOD_TABLE_INLINE
 
 /* add -DMRB_INT16 to use 16bit integer for mrb_int; conflict with MRB_INT64 */
 //#define MRB_INT16
@@ -17,7 +47,18 @@
 /* add -DMRB_INT64 to use 64bit integer for mrb_int; conflict with MRB_INT16 */
 //#define MRB_INT64
 
-/* represent mrb_value in boxed double; conflict with MRB_USE_FLOAT */
+/* if no specific integer type is chosen */
+#if !defined(MRB_INT16) && !defined(MRB_INT32) && !defined(MRB_INT64)
+# if defined(MRB_64BIT) && !defined(MRB_NAN_BOXING)
+/* Use 64bit integers on 64bit architecture (without MRB_NAN_BOXING) */
+#  define MRB_INT64
+# else
+/* Otherwise use 32bit integers */
+#  define MRB_INT32
+# endif
+#endif
+
+/* represent mrb_value in boxed double; conflict with MRB_USE_FLOAT and MRB_WITHOUT_FLOAT */
 //#define MRB_NAN_BOXING
 
 /* define on big endian machines; used by MRB_NAN_BOXING */
@@ -26,17 +67,21 @@
 /* represent mrb_value as a word (natural unit of data for the processor) */
 //#define MRB_WORD_BOXING
 
+/* string class to handle UTF-8 encoding */
+//#define MRB_UTF8_STRING
+
 /* argv max size in mrb_funcall */
 //#define MRB_FUNCALL_ARGC_MAX 16
 
 /* number of object per heap page */
 //#define MRB_HEAP_PAGE_SIZE 1024
 
-/* use segmented list for IV table */
-//#define MRB_USE_IV_SEGLIST
+/* if _etext and _edata available, mruby can reduce memory used by symbols */
+//#define MRB_USE_ETEXT_EDATA
 
-/* initial size for IV khash; ignored when MRB_USE_IV_SEGLIST is set */
-//#define MRB_IVHASH_INIT_SIZE 8
+/* do not use __init_array_start to determine readonly data section;
+   effective only when MRB_USE_ETEXT_EDATA is defined */
+//#define MRB_NO_INIT_ARRAY_START
 
 /* turn off generational GC by default */
 //#define MRB_GC_TURN_OFF_GENERATIONAL
@@ -65,23 +110,25 @@
 /* fixed size state atexit stack */
 //#define MRB_FIXED_STATE_ATEXIT_STACK
 
-/* -DDISABLE_XXXX to drop following features */
-//#define DISABLE_STDIO		/* use of stdio */
+/* -DMRB_DISABLE_XXXX to drop following features */
+//#define MRB_DISABLE_STDIO /* use of stdio */
 
-/* -DENABLE_XXXX to enable following features */
-//#define ENABLE_DEBUG		/* hooks for debugger */
+/* -DMRB_ENABLE_XXXX to enable following features */
+//#define MRB_ENABLE_DEBUG_HOOK /* hooks for debugger */
 
 /* end of configuration */
 
-/* define ENABLE_XXXX from DISABLE_XXX */
-#ifndef DISABLE_STDIO
-#define ENABLE_STDIO
-#endif
-#ifndef ENABLE_DEBUG
-#define DISABLE_DEBUG
+/* define MRB_DISABLE_XXXX from DISABLE_XXX (for compatibility) */
+#ifdef DISABLE_STDIO
+#define MRB_DISABLE_STDIO
 #endif
 
-#ifdef ENABLE_STDIO
+/* define MRB_ENABLE_XXXX from ENABLE_XXX (for compatibility) */
+#ifdef ENABLE_DEBUG
+#define MRB_ENABLE_DEBUG_HOOK
+#endif
+
+#ifndef MRB_DISABLE_STDIO
 # include <stdio.h>
 #endif
 
@@ -91,17 +138,6 @@
 
 #ifndef TRUE
 # define TRUE 1
-#endif
-
-#if defined(MRB_BUILD_AS_DLL)
-
-#if defined(MRB_CORE) || defined(MRB_LIB)
-#define MRB_API __declspec(dllexport)
-#else
-#define MRB_API __declspec(dllimport)
-#endif
-#else
-#define MRB_API extern
 #endif
 
 #endif  /* MRUBYCONF_H */
