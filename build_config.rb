@@ -124,6 +124,33 @@ MRuby::Build.new('test') do |conf|
   conf.gembox 'default'
 end
 
+MRuby::Build.new('dekopon') do |conf|
+  toolchain :gcc
+
+  cross = ENV["CROSS_COMPILE"]
+  abort "Define CROSS_COMPILE to build mruby for RX" unless cross
+  
+  def convertPathForRake(path)
+    path.gsub(/\\([() ])/, "\\1")
+  end
+
+  conf.cc.command = convertPathForRake(ENV["CROSS_CC"])
+  conf.cxx.command = convertPathForRake(ENV["CROSS_CXX"])
+  conf.linker.command = convertPathForRake(ENV["CROSS_LD"])
+  conf.archiver.command = convertPathForRake(ENV["CROSS_AR"])
+
+  [conf.cc, conf.cxx].each do |cc|
+    cc.flags = ENV["CROSS_CFLAGS"].split(" ")
+  end
+
+  conf.build_mrbtest_lib_only
+  conf.disable_cxx_exception
+
+  conf.gem :core => "mruby-math"
+  conf.gem :core => "mruby-numeric-ext"
+  conf.gem :core => "mruby-string-ext"
+end
+
 #MRuby::Build.new('bench') do |conf|
 #  # Gets set by the VS command prompts.
 #  if ENV['VisualStudioVersion'] || ENV['VSINSTALLDIR']
