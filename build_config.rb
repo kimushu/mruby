@@ -124,7 +124,7 @@ MRuby::Build.new('test') do |conf|
   conf.gembox 'default'
 end
 
-if ENV["CROSS_CFLAGS"]
+if ENV["CROSS_CC"]
   MRuby::Build.new('rx600') do |conf|
     toolchain :gcc
 
