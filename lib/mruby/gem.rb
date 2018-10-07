@@ -176,6 +176,7 @@ module MRuby
             f.puts %Q[  mrb_load_irep(mrb, gem_mrblib_irep_#{funcname});]
             f.puts %Q[  if (mrb->exc) {]
             f.puts %Q[    mrb_print_error(mrb);]
+            f.puts %Q[    mrb_close(mrb);]
             f.puts %Q[    exit(EXIT_FAILURE);]
             f.puts %Q[  }]
           end
@@ -453,5 +454,6 @@ module MRuby
     def new(&block); block.call(self); end
     def config=(obj); @config = obj; end
     def gem(gemdir, &block); @config.gem(gemdir, &block); end
+    def gembox(gemfile); @config.gembox(gemfile); end
   end # GemBox
 end # MRuby
